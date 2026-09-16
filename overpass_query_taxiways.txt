@@ -1,0 +1,6 @@
+[out:json];
+(
+  way["aeroway"="taxiway"](49.17,-123.22,49.21,-123.13);
+  way["aeroway"="apron"](49.17,-123.22,49.21,-123.13);
+);
+out geom;

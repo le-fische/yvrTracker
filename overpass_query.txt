@@ -1,0 +1,10 @@
+[out:json];
+(
+  relation["name"="Richmond"]["admin_level"="8"](49.0,-123.4,49.4,-122.8);
+  relation["name"="Vancouver"]["admin_level"="8"](49.0,-123.4,49.4,-122.8);
+  relation["name"="Burnaby"]["admin_level"="8"](49.0,-123.4,49.4,-122.8);
+  relation["name"="Delta"]["admin_level"="8"](49.0,-123.4,49.4,-122.8);
+  relation["name"="Surrey"]["admin_level"="8"](49.0,-123.4,49.4,-122.8);
+  relation["name"="University Endowment Lands"](49.0,-123.4,49.4,-122.8);
+);
+out geom;
