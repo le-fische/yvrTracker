@@ -104,7 +104,7 @@ export default function App() {
       />
 
       <Canvas gl={{ logarithmicDepthBuffer: true }} style={{ background: '#020202' }}>
-        <PerspectiveCamera makeDefault position={[-11, 10, -15]} near={0.001} far={2000} fov={85} />
+        <PerspectiveCamera makeDefault position={[4, 10, 18]} near={0.001} far={2000} fov={85} />
         
         <CameraController cameraMode={cameraMode} selectedAircraftId={selectedAircraft?.id} resetTrigger={resetCamera} chaseViewIndex={chaseViewIndex} />
         <EnvironmentLighting />

@@ -120,7 +120,7 @@ export default function CameraController({ cameraMode, selectedAircraftId, reset
 
         if (window.isResetting) {
            const defaultTarget = new THREE.Vector3(4.06, 0, -0.25);
-           const defaultPos = new THREE.Vector3(-11, 10, -15);
+           const defaultPos = new THREE.Vector3(4, 10, 18);
            controls.target.lerp(defaultTarget, 0.05);
            camera.position.lerp(defaultPos, 0.05);
            
