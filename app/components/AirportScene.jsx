@@ -18,6 +18,7 @@ import CameraController from './camera/CameraController'
 import ControlPanel from './ui/ControlPanel'
 import TelemetryHUD from './ui/TelemetryHUD'
 import Loader from './ui/Loader'
+import DisclaimerPopup from './ui/DisclaimerPopup'
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -123,6 +124,7 @@ export default function App() {
         </Suspense>
       </Canvas>
 
+      <DisclaimerPopup />
       {!showOpsPanel && <TelemetryHUD aircraft={selectedAircraft} onClose={() => setSelectedAircraft(null)} useMetric={useMetric} chaseViewIndex={chaseViewIndex} />}
 
       <style jsx global>{`

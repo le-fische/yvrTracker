@@ -198,6 +198,13 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
     if (t.startsWith('ASK') || t.startsWith('GLID')) return '/models/ask21.glb'
     if (t === 'A225') return '/models/an225.gltf'
     
+    // Inferred Category Fallbacks
+    if (t === 'LIGHT AIRCRAFT' || t === 'HIGH PERFORMANCE') return '/models/pa28.glb'
+    if (t === 'SMALL COMMUTER') return '/models/q400.glb'
+    if (t === 'LARGE JET' || t === 'HIGH VORTEX JET') return '/models/b738.glb'
+    if (t === 'HEAVY JET') return '/b777_final.glb'
+    if (t === 'HELICOPTER') return '/models/heli.glb'
+    
     return '/b777_final.glb'
   }, [flight.type, flight.callsign, flight.category])
 

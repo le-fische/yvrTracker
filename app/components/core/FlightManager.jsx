@@ -51,18 +51,32 @@ export default function FlightManager({ useMetric, onSelect, selectedAircraft, s
               else status = 'CRUISING';
             }
 
-            return {
-              id: ac.hex,
-              callsign: ac.flight ? ac.flight.trim() : ac.r || ac.hex,
-              longitude: parseFloat(ac.lon),
-              latitude: parseFloat(ac.lat),
-              altitude: parsedAltitude,
-              heading: parsedHeading,
-              velocity: parsedVelocity,
-              desc: ac.desc,
-              ownOp: ac.ownOp,
-              type: ac.t || 'Unknown',
-              category: ac.category || 'N/A',
+              let inferredType = ac.t;
+              if (!inferredType) {
+                switch(ac.category) {
+                  case 'A1': inferredType = 'Light Aircraft'; break;
+                  case 'A2': inferredType = 'Small Commuter'; break;
+                  case 'A3': inferredType = 'Large Jet'; break;
+                  case 'A4': inferredType = 'High Vortex Jet'; break;
+                  case 'A5': inferredType = 'Heavy Jet'; break;
+                  case 'A6': inferredType = 'High Performance'; break;
+                  case 'A7': inferredType = 'Helicopter'; break;
+                  default: inferredType = 'Unknown'; break;
+                }
+              }
+
+              return {
+                id: ac.hex,
+                callsign: ac.flight ? ac.flight.trim() : ac.r || ac.hex,
+                longitude: parseFloat(ac.lon),
+                latitude: parseFloat(ac.lat),
+                altitude: parsedAltitude,
+                heading: parsedHeading,
+                velocity: parsedVelocity,
+                desc: ac.desc,
+                ownOp: ac.ownOp,
+                type: inferredType,
+                category: ac.category || 'N/A',
               status: status
             }
           }).filter(f => !isNaN(f.latitude) && !isNaN(f.longitude))
