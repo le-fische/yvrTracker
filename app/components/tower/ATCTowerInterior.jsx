@@ -9,10 +9,10 @@ import {
   CommsMonitor, 
   RunwayMonitor, 
   TimeMonitor, 
-  FlightSearchMonitor 
+  AircraftShowcaseMonitor 
 } from './TowerMonitors'
 
-export default function ATCTowerInterior({ weather, activeRunways, inboundFlights, outboundFlights, flights, onSelect }) {
+export default function ATCTowerInterior({ weather, activeRunways, inboundFlights, outboundFlights, flights, onSelect, onEnterShowcase }) {
   return (
     <group position={[4.06, 0.7, -0.25]} scale={1.8}>
       {/* Floor */}
@@ -81,9 +81,9 @@ export default function ATCTowerInterior({ weather, activeRunways, inboundFlight
           )}
         </ConsoleMachine>
 
-        {/* Monitor 3: Interactive Flight Search (Right) */}
+        {/* Monitor 3: Showcase Trigger (Right) */}
         <ConsoleMachine position={[0.01, -0.01, -0.01]} rotation={[0, -Math.PI / 4, 0]}>
-          <FlightSearchMonitor flights={flights} onSelect={onSelect} />
+          <AircraftShowcaseMonitor onClick={onEnterShowcase} />
         </ConsoleMachine>
 
         {/* Active Console Suite Ring */}

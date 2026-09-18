@@ -175,18 +175,10 @@ export function TimeMonitor() {
   )
 }
 
-export function FlightSearchMonitor({ flights, onSelect }) {
-  const [searchTerm, setSearchTerm] = useState('')
-  
-  const filtered = useMemo(() => {
-    if (!flights) return [];
-    if (!searchTerm) return flights.slice(0, 10);
-    return flights.filter(f => f.callsign.toLowerCase().includes(searchTerm.toLowerCase())).slice(0, 10)
-  }, [flights, searchTerm])
-
+export function AircraftShowcaseMonitor({ onClick }) {
   return (
     <group>
-      <Text position={[-0.004, 0.002, 0]} fontSize={0.0004} color="#00ffcc" anchorX="left" anchorY="top">FLIGHT SEARCH</Text>
+      <Text position={[-0.004, 0.002, 0]} fontSize={0.0004} color="#00ffcc" anchorX="left" anchorY="top">FLEET SHOWCASE</Text>
       
       <Html 
         transform 
@@ -194,52 +186,31 @@ export function FlightSearchMonitor({ flights, onSelect }) {
         scale={0.00008}
         zIndexRange={[0, 0]}
       >
-        <div style={{
-          width: '100px', height: '60px', 
-          background: 'transparent',
-          color: '#00ffcc',
-          fontFamily: 'monospace',
-          fontSize: '5px',
-          display: 'flex', flexDirection: 'column'
-        }} onPointerDown={(e) => e.stopPropagation()}>
-          <input 
-            type="text" 
-            placeholder="SEARCH CALLSIGN..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            style={{
-               background: 'rgba(0, 255, 204, 0.1)',
-               border: '0.5px solid rgba(0, 255, 204, 0.5)',
-               color: 'white',
-               fontSize: '5px',
-               padding: '2px',
-               marginBottom: '2px',
-               outline: 'none',
-               width: '100%',
-               boxSizing: 'border-box'
-            }}
-          />
-          <div style={{ overflowY: 'auto', flex: 1, paddingRight: '1px' }}>
-             {filtered.map(f => (
-               <div 
-                 key={f.id}
-                 onClick={() => onSelect(f)}
-                 style={{
-                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                   padding: '2px 1px', cursor: 'pointer',
-                   borderBottom: '0.2px solid rgba(255,255,255,0.1)'
-                 }}
-                 onMouseOver={e => e.currentTarget.style.background = 'rgba(0,255,204,0.3)'}
-                 onMouseOut={e => e.currentTarget.style.background = 'transparent'}
-               >
-                 <span style={{ fontWeight: 'bold' }}>{f.callsign}</span>
-                 <span style={{ color: 'white', fontSize: '4px' }}>{f.type}</span>
-               </div>
-             ))}
-             {filtered.length === 0 && (
-               <div style={{ color: '#888', textAlign: 'center', marginTop: '4px' }}>NO MATCHES</div>
-             )}
-          </div>
+        <div 
+          onClick={onClick}
+          style={{
+            width: '100px', height: '60px', 
+            background: 'rgba(0, 255, 204, 0.05)',
+            border: '1px solid rgba(0, 255, 204, 0.3)',
+            color: '#00ffcc',
+            fontFamily: 'monospace',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', transition: 'all 0.2s',
+            borderRadius: '4px'
+          }}
+          onMouseOver={e => {
+             e.currentTarget.style.background = 'rgba(0, 255, 204, 0.2)';
+             e.currentTarget.style.boxShadow = '0 0 10px rgba(0,255,204,0.5)';
+          }}
+          onMouseOut={e => {
+             e.currentTarget.style.background = 'rgba(0, 255, 204, 0.05)';
+             e.currentTarget.style.boxShadow = 'none';
+          }}
+        >
+          <div style={{ fontSize: '12px', marginBottom: '4px' }}>✈️</div>
+          <div style={{ fontSize: '6px', fontWeight: 'bold', letterSpacing: '1px', textAlign: 'center' }}>ENTER</div>
+          <div style={{ fontSize: '6px', fontWeight: 'bold', letterSpacing: '1px', textAlign: 'center' }}>SHOWCASE</div>
         </div>
       </Html>
     </group>

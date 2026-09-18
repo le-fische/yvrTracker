@@ -16,6 +16,7 @@ import { TimeOfDayProvider } from './core/TimeOfDayContext'
 import ATCTowerInterior from './tower/ATCTowerInterior'
 import CameraController from './camera/CameraController'
 import { CAMERA_VIEWS } from './camera/views'
+import AircraftShowcase from './aircraft/AircraftShowcase'
 
 // UI
 import ControlPanel from './ui/ControlPanel'
@@ -103,39 +104,51 @@ export default function App() {
   return (
     <TimeOfDayProvider>
       <ErrorBoundary>
-        <ControlPanel 
-          showRoutes={showRoutes} setShowRoutes={setShowRoutes}
-          cameraMode={cameraMode} setCameraMode={setCameraMode}
-          useMetric={useMetric} setUseMetric={setUseMetric}
-          showOpsPanel={showOpsPanel} setShowOpsPanel={setShowOpsPanel}
-          weather={weather} activeRunways={activeRunways}
-          inboundFlights={inboundFlights} outboundFlights={outboundFlights}
-          setSelectedAircraft={selectAircraft} setResetCamera={setResetCamera}
-        />
+        {cameraMode !== 'SHOWCASE' && (
+          <ControlPanel 
+            showRoutes={showRoutes} setShowRoutes={setShowRoutes}
+            cameraMode={cameraMode} setCameraMode={setCameraMode}
+            useMetric={useMetric} setUseMetric={setUseMetric}
+            showOpsPanel={showOpsPanel} setShowOpsPanel={setShowOpsPanel}
+            weather={weather} activeRunways={activeRunways}
+            inboundFlights={inboundFlights} outboundFlights={outboundFlights}
+            setSelectedAircraft={selectAircraft} setResetCamera={setResetCamera}
+          />
+        )}
 
-        <Canvas gl={{ logarithmicDepthBuffer: true }} style={{ background: '#020202' }}>
+        <Canvas gl={{ logarithmicDepthBuffer: true }} style={{ background: cameraMode === 'SHOWCASE' ? '#050810' : '#020202' }}>
           <PerspectiveCamera makeDefault position={[4, 10, 18]} near={0.001} far={2000} fov={DEFAULT_FOV} />
           
-          <CameraController cameraMode={cameraMode} selectedAircraftId={selectedAircraft?.id} resetTrigger={resetCamera} chaseViewIndex={chaseViewIndex} />
-          <EnvironmentLighting />
-          
-          <Suspense fallback={<Loader />}>
-            <RealYVRAirport />
-            <FlightManager 
-              useMetric={useMetric} 
-              onSelect={selectAircraft} 
-              selectedAircraft={selectedAircraft}
-              showRoutes={showRoutes}
-              onFlightsUpdate={setFlights}
-            />
-            {cameraMode === 'TOWER' && !selectedAircraft && (
-              <ATCTowerInterior weather={weather} activeRunways={activeRunways} inboundFlights={inboundFlights} outboundFlights={outboundFlights} flights={flights} onSelect={selectAircraft} />
-            )}
-          </Suspense>
+          {cameraMode === 'SHOWCASE' ? (
+            <AircraftShowcase onClose={() => setCameraMode('TOWER')} />
+          ) : (
+            <>
+              <CameraController cameraMode={cameraMode} selectedAircraftId={selectedAircraft?.id} resetTrigger={resetCamera} chaseViewIndex={chaseViewIndex} />
+              <EnvironmentLighting />
+              
+              <Suspense fallback={<Loader />}>
+                <RealYVRAirport />
+                <FlightManager 
+                  useMetric={useMetric} 
+                  onSelect={selectAircraft} 
+                  selectedAircraft={selectedAircraft}
+                  showRoutes={showRoutes}
+                  onFlightsUpdate={setFlights}
+                />
+                {cameraMode === 'TOWER' && !selectedAircraft && (
+                  <ATCTowerInterior weather={weather} activeRunways={activeRunways} inboundFlights={inboundFlights} outboundFlights={outboundFlights} flights={flights} onSelect={selectAircraft} onEnterShowcase={() => setCameraMode('SHOWCASE')} />
+                )}
+              </Suspense>
+            </>
+          )}
         </Canvas>
 
-        <DisclaimerPopup />
-        {!showOpsPanel && <TelemetryHUD aircraft={selectedAircraft} onClose={() => selectAircraft(null)} useMetric={useMetric} chaseViewIndex={chaseViewIndex} setChaseViewIndex={setChaseViewIndex} />}
+        {cameraMode !== 'SHOWCASE' && (
+          <>
+            <DisclaimerPopup />
+            {!showOpsPanel && <TelemetryHUD aircraft={selectedAircraft} onClose={() => selectAircraft(null)} useMetric={useMetric} chaseViewIndex={chaseViewIndex} setChaseViewIndex={setChaseViewIndex} />}
+          </>
+        )}
 
         <style jsx global>{`
           @keyframes pulse {
