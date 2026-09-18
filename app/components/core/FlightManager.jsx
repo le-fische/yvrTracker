@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { YVR_LAT, YVR_LON } from './constants'
 import LiveAircraft from '../aircraft/LiveAircraft'
+import { inferOperator } from './operators'
 
 export default function FlightManager({ useMetric, onSelect, selectedAircraft, showRoutes, onFlightsUpdate }) {
   const [flights, setFlights] = useState([])
@@ -74,7 +75,7 @@ export default function FlightManager({ useMetric, onSelect, selectedAircraft, s
                 heading: parsedHeading,
                 velocity: parsedVelocity,
                 desc: ac.desc,
-                ownOp: ac.ownOp,
+                ownOp: inferOperator(ac.flight, ac.r, ac.ownOp),
                 type: inferredType,
                 category: ac.category || 'N/A',
                 registration: ac.r || null,

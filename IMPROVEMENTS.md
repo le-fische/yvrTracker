@@ -647,6 +647,67 @@ measurably; record before/after with the Chrome performance panel over a 10 s ca
 
 ---
 
+### 12d. Trails vanish at some angles, are 30x too short, and render 1px
+
+**Reported from live testing: trails disappear at certain angles and zooms, and the altitude profile reads
+as sharp dips rather than a smooth arc. Three separate causes.**
+
+**File:** `app/components/aircraft/LiveAircraft.jsx`
+
+**Cause 1 — stale bounding sphere, so the line gets frustum-culled.** Nothing calls
+`computeBoundingSphere()` and `frustumCulled` is never set (confirmed: zero occurrences of either in the
+file). `Frustum.intersectsObject` computes the bounding sphere **only when it is `null`**, then caches it
+forever (`three/src/math/Frustum.js`). Setting `attributes.position.needsUpdate = true` does not
+invalidate it. So the sphere is computed once, from a `Float32Array` that is still almost all zeros, and
+ends up as a tiny sphere near the world origin. As the aircraft flies away, the real trail leaves that
+sphere and the line is culled whenever the camera frustum misses the origin. That is the
+disappears-at-certain-angles symptom exactly.
+
+**Cause 2 — the trail is 4 seconds long instead of 2 minutes.**
+
+```
+old:  80 points x 1500 ms  = 120 s of history
+new:  20 points x  200 ms  =   4 s of history
+```
+
+30x shorter. Worse, 200 ms sampling resolves the piecewise-linear interpolation *between* feed samples, so
+every slope change at a feed boundary shows up as a visible kink. The old 1500 ms interval was close to
+the feed interval, so it captured roughly one point per data point and read as a smooth track. Those are
+the "sharp dips".
+
+A related pre-existing contributor: in the extrapolation branch, only x and z advance. `y` is held flat
+until the next feed sample lands, then steps. That stair-steps altitude independently of sampling rate.
+
+**Cause 3 — 1px lines.** Covered in item 12c. `LineBasicMaterial` ignores `linewidth`; native GL lines
+rasterize inconsistently and thin out or drop out at grazing angles. drei's `<Line>` wrapped
+`Line2`/`LineMaterial`, which draws screen-space-width quads and is always solid. This is the part that
+reads as "the old one looked better".
+
+**Two ways forward. The perf win from item 12 came from removing the React re-renders, not from switching
+to native lines, so the old look and the new cost are not in conflict.**
+
+*Option C (cheap, do this first to confirm the diagnosis):* keep native lines, three changes.
+- add `frustumCulled={false}` to the `<line>`,
+- `TRAIL_POINTS = 80`,
+- raise the sample interval from `200` to `1500` ms.
+
+That fixes causes 1 and 2 and leaves the 1px width. Ten minutes of work, and it isolates whether the
+width is the remaining complaint.
+
+*Option B (if the width still reads wrong):* render with drei's `<Line>` again but drive it
+**imperatively**. Pass a static initial `points` prop, take a ref to the underlying `Line2`, and call
+`ref.current.geometry.setPositions(...)` / `.setColors(...)` from the existing `useFrame` when a point is
+added. No `points` prop churn, so no React re-render and no per-update geometry rebuild — the item 12 win
+is kept. Use drei's `<Line>` rather than raw `Line2` because `LineMaterial` needs its `resolution`
+uniform kept in sync with canvas size, and drei does that for you. Sample at ~1500 ms, since
+`setPositions` does reallocate the instanced attributes on each call.
+
+**Verify:** fly the camera to a far corner of the scene with SHOW TRAILS on. Every visible aircraft keeps
+its trail at every angle and zoom. A climbing aircraft's trail reads as a smooth arc over roughly two
+minutes of track, not a 4-second stub with visible corners.
+
+---
+
 ### 13. Playback delay and buffer length are oversized
 
 **File:** `app/components/aircraft/LiveAircraft.jsx:46,73`
@@ -908,6 +969,130 @@ and a text geometry. That is 4 meshes per runway rather than 2, so 12 total inst
 you started from, the difference is irrelevant, and the scene keeps its look.
 
 **Verify:** the runway numbers read cyan and opaque again, matching the taxiway and coastline accents.
+
+---
+
+## New feature
+
+### 20. Named camera views with a UI selector, plus cockpit and tail cams
+
+**This is a feature, not a fix.** Scope agreed: add **cockpit** and **tail** to the existing set, place
+them from the aircraft's real bounding box, give every view a labelled button, and allow free look in
+cockpit only.
+
+**Files:** `app/components/camera/CameraController.jsx`, `app/components/aircraft/GLTFAircraft.jsx`,
+`app/components/aircraft/LiveAircraft.jsx`, `app/components/ui/TelemetryHUD.jsx`,
+`app/components/AirportScene.jsx`, plus a new `app/components/camera/views.js`.
+
+#### 20.1 Replace the magic indices with a view table
+
+`chaseViewIndex` is currently a bare number checked with `if (chaseViewIndex === 1) ... === 2 ...` at
+`CameraController.jsx:90-93`. With seven views that does not hold up, and the UI needs labels anyway.
+
+Create `app/components/camera/views.js` exporting one ordered array. Offsets stay in scene units
+(1 unit = 100 m) and are applied with `offset.applyQuaternion(aircraftRef.quaternion)` exactly as today:
+
+| index | id | label | placement | look direction |
+|---|---|---|---|---|
+| 0 | `FOLLOW` | FOLLOW | orbit, `controls.target` locked to aircraft | user controlled |
+| 1 | `CHASE` | CHASE | `(0, 0.4, 1.2)` | at aircraft |
+| 2 | `WING_L` | WING L | `(-1.0, 0.2, 0)` | at aircraft |
+| 3 | `WING_R` | WING R | `(1.0, 0.2, 0)` | at aircraft |
+| 4 | `LEAD` | LEAD | `(0, 0.1, -1.2)` | at aircraft |
+| 5 | `COCKPIT` | COCKPIT | size-aware, see 20.3 | **forward along aircraft** |
+| 6 | `TAIL` | TAIL | size-aware, see 20.3 | **forward along aircraft** |
+
+Index 0 stays `FOLLOW` so the existing `setChaseViewIndex(0)` reset on selection keeps working unchanged.
+The `C` key cycles `(prev + 1) % views.length` instead of the hardcoded `% 5` at `AirportScene.jsx:90`.
+
+#### 20.2 Expose the aircraft bounding box
+
+`GLTFAircraft.jsx:24-31` already computes a `Box3` and stores it in local state as `metrics`. Nothing
+upstream can see it.
+
+- `GLTFAircraft` takes a new `onMetrics` callback and calls it once from the existing `useLayoutEffect`,
+  alongside `setMetrics`. Do not add a second `Box3` pass.
+- `LiveAircraft` passes
+  `onMetrics={(m) => { if (planeRef.current) planeRef.current.userData.metrics = m }}`.
+  `window.aircraftRefs[flight.id]` **is** `planeRef.current`, so `CameraController` reads it straight off
+  `aircraftRef.userData.metrics` with no context and no prop drilling.
+- **Multiply by the render scale.** `metrics` are in the model's own units; `LiveAircraft:239` renders
+  with `scale={0.01}`. Store already-scaled values so `CameraController` never has to know the scale:
+
+```js
+onMetrics={(m) => {
+  if (!planeRef.current) return
+  const s = 0.01                       // must match the scale prop below
+  planeRef.current.userData.metrics = {
+    noseZ: m.minZ * s,                 // forward end, most negative Z
+    tailZ: m.maxZ * s,
+    lengthZ: (m.maxZ - m.minZ) * s,
+    heightY: (m.maxY - m.minY) * s,
+  }
+}}
+```
+
+#### 20.3 Cockpit and tail placement
+
+Forward is **-Z** in both model and world space: `planeRef.current.rotation.y = -heading`, and the
+extrapolation at `LiveAircraft.jsx:95-97` advances by `sin(heading)` in x and `-cos(heading)` in z. The
+existing `AircraftLights` agrees, putting the tail near `maxZ`.
+
+- **COCKPIT:** `offset.set(0, heightY * 0.55, noseZ - lengthZ * 0.02)`. Placing it a fraction *ahead* of
+  the nose rather than exactly at it keeps the camera outside the fuselage, so the aircraft's own
+  wireframe does not fill the view. This is deliberately chosen over plumbing `isSelected` into
+  `GLTFAircraft` to hide the mesh — same visual result, no new plumbing.
+- **TAIL:** `offset.set(0, heightY * 1.1, tailZ)`. Mounted above the fin looking forward over the
+  fuselage, like an airliner tail camera. Note this is the "camera on the tail looking forward" reading,
+  not "camera behind looking at the tail" — `CHASE` already covers the latter.
+
+**Both look forward, not at the aircraft.** Every fixed view today ends with
+`lookAt(camera.position, planePos, camera.up)` (`CameraController.jsx:100-103`). That is wrong for these
+two. Give each view entry a `lookAt` field of `'aircraft'` or `'forward'`; for `'forward'`, aim at
+`planePos + forwardVector`, where `forwardVector` is `(0, 0, -1)` run through `aircraftRef.quaternion`.
+
+**Verification risk worth checking early:** this assumes all 40 GLBs were authored nose-toward--Z. They
+came from different sources and that is not guaranteed. Spot-check at least `b738`, `q400`, `pa28` and
+`heli` before tuning any offsets — a model authored backwards gives a cockpit view that looks out of the
+tail.
+
+#### 20.4 Free look in cockpit only
+
+Everything except `COCKPIT` keeps `controls.enabled = false` and stays a fixed cinematic shot.
+
+For `COCKPIT`, do **not** try to reuse `OrbitControls`. Orbiting moves the camera, which this code then
+re-pins every frame, so the two fight. Add a small pointer-drag handler on `gl.domElement` that
+accumulates `yawOffset` / `pitchOffset` in refs and composes them onto the aircraft-relative orientation:
+
+- pointerdown / pointermove / pointerup, active only while the view is `COCKPIT`,
+- clamp pitch to roughly `+/- 70` degrees,
+- reset both offsets to 0 whenever the view or the selected aircraft changes,
+- register and tear down in a `useEffect` keyed on the view id, next to the existing wheel handler at
+  `CameraController.jsx:14-26`.
+
+Roughly 25 lines. It is the only genuinely new mechanism in this item.
+
+#### 20.5 The HUD
+
+`TelemetryHUD.jsx:24-28` currently **replaces** the entire telemetry panel with a "CINEMATIC CHASE MODE"
+placeholder whenever `chaseViewIndex > 0`. That removes altitude and ground speed at exactly the moment
+you are flying with the aircraft.
+
+- Delete that branch. Telemetry is always visible.
+- Add a row of view buttons above the altitude/speed grid, labelled from the view table, styled like the
+  existing segmented controls at `ControlPanel.jsx:46-59` (active `#00ffcc` on `#000`, inactive `#888`).
+  Seven buttons will not fit in one row at 360 px, so wrap to two rows or shorten the labels.
+- Keep the `PRESS C FOR CHASE CAM · X TO DESELECT` footer from item 10.
+- `AirportScene` passes `chaseViewIndex` and `setChaseViewIndex` down; it already owns both.
+
+**Verify:**
+- Every view is reachable by button and by cycling `C`, and the two stay in sync.
+- COCKPIT on a 777 and on a PA28 both sit just ahead of the nose looking forward. This is the test that
+  proves 20.2 worked; a fixed offset fails one of the two.
+- TAIL looks forward over the fuselage, with the aircraft visible below the camera.
+- Dragging in COCKPIT swings the view and does not move the camera off the nose. Switching view or
+  aircraft resets the look direction to straight ahead.
+- Telemetry stays visible and live in every view.
 
 ---
 

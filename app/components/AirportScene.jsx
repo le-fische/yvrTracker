@@ -22,7 +22,6 @@ import ControlPanel from './ui/ControlPanel'
 import TelemetryHUD from './ui/TelemetryHUD'
 import Loader from './ui/Loader'
 import DisclaimerPopup from './ui/DisclaimerPopup'
-import RosterSidebar from './ui/RosterSidebar'
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -136,13 +135,6 @@ export default function App() {
         </Canvas>
 
         <DisclaimerPopup />
-        <RosterSidebar 
-          flights={flights} 
-          showOpsPanel={showOpsPanel} 
-          selectedAircraft={selectedAircraft} 
-          setSelectedAircraft={selectAircraft} 
-          useMetric={useMetric} 
-        />
         {!showOpsPanel && <TelemetryHUD aircraft={selectedAircraft} onClose={() => selectAircraft(null)} useMetric={useMetric} chaseViewIndex={chaseViewIndex} setChaseViewIndex={setChaseViewIndex} />}
 
         <style jsx global>{`

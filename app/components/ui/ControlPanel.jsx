@@ -131,8 +131,14 @@ export default function ControlPanel({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div>
               <div style={{ color: '#888', fontSize: '11px', borderBottom: '1px solid #333', paddingBottom: '6px', marginBottom: '8px', fontWeight: 'bold' }}>INBOUND ({inboundFlights.length})</div>
-              {inboundFlights.length === 0 ? <div style={{ color: '#555', fontSize: '12px' }}>NONE</div> : inboundFlights.slice(0, 8).map(f => (
-                <div key={f.id} style={{ fontSize: '12px', color: 'white', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between' }}>
+              {inboundFlights.length === 0 ? <div style={{ color: '#555', fontSize: '12px' }}>NONE</div> : inboundFlights.slice(0, 15).map(f => (
+                <div 
+                  key={f.id} 
+                  onClick={() => setSelectedAircraft(f)}
+                  style={{ fontSize: '12px', color: 'white', padding: '6px 4px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', cursor: 'pointer', transition: 'background 0.2s', borderRadius: '4px' }}
+                  onMouseOver={(e) => e.currentTarget.style.background = 'rgba(0,255,204,0.1)'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                >
                   <span>{f.callsign}</span>
                   <span style={{ color: '#00ffcc' }}>{f.type}</span>
                 </div>
@@ -140,8 +146,14 @@ export default function ControlPanel({
             </div>
             <div>
               <div style={{ color: '#888', fontSize: '11px', borderBottom: '1px solid #333', paddingBottom: '6px', marginBottom: '8px', fontWeight: 'bold' }}>OUTBOUND ({outboundFlights.length})</div>
-              {outboundFlights.length === 0 ? <div style={{ color: '#555', fontSize: '12px' }}>NONE</div> : outboundFlights.slice(0, 8).map(f => (
-                <div key={f.id} style={{ fontSize: '12px', color: 'white', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between' }}>
+              {outboundFlights.length === 0 ? <div style={{ color: '#555', fontSize: '12px' }}>NONE</div> : outboundFlights.slice(0, 15).map(f => (
+                <div 
+                  key={f.id} 
+                  onClick={() => setSelectedAircraft(f)}
+                  style={{ fontSize: '12px', color: 'white', padding: '6px 4px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', cursor: 'pointer', transition: 'background 0.2s', borderRadius: '4px' }}
+                  onMouseOver={(e) => e.currentTarget.style.background = 'rgba(0,255,204,0.1)'}
+                  onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+                >
                   <span>{f.callsign}</span>
                   <span style={{ color: '#00ffcc' }}>{f.type}</span>
                 </div>
