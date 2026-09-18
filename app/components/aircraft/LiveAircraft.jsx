@@ -11,7 +11,7 @@ import { TimeOfDayContext } from '../core/TimeOfDayContext'
 
 const PLAYBACK_DELAY_MS = 2500;
 const BUFFER_SIZE = 6;
-const TRAIL_POINTS = 20;
+const TRAIL_POINTS = 80;
 
 const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, isSelected, useMetric }) {
   const planeRef = useRef()
@@ -110,7 +110,7 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
     if (!showRoutes) return;
 
     const now = performance.now();
-    if (now - lastTrailTime.current > 200) {
+    if (now - lastTrailTime.current > 1500) {
       lastTrailTime.current = now;
       
       const count = trailCount.current;
@@ -282,7 +282,7 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
       </group>
       
       {showRoutes && (
-        <line>
+        <line frustumCulled={false}>
           <bufferGeometry ref={geomRef}>
             <bufferAttribute
               attach="attributes-position"
