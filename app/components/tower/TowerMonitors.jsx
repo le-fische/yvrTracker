@@ -180,39 +180,25 @@ export function AircraftShowcaseMonitor({ onClick }) {
     <group>
       <Text position={[-0.004, 0.002, 0]} fontSize={0.0004} color="#00ffcc" anchorX="left" anchorY="top">FLEET SHOWCASE</Text>
       
-      <Html 
-        transform 
-        position={[0, -0.0007, 0.0001]} 
-        scale={0.00008}
-        zIndexRange={[0, 0]}
-      >
-        <div 
-          onClick={onClick}
-          style={{
-            width: '100px', height: '60px', 
-            background: 'rgba(0, 255, 204, 0.05)',
-            border: '1px solid rgba(0, 255, 204, 0.3)',
-            color: '#00ffcc',
-            fontFamily: 'monospace',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', transition: 'all 0.2s',
-            borderRadius: '4px'
-          }}
-          onMouseOver={e => {
-             e.currentTarget.style.background = 'rgba(0, 255, 204, 0.2)';
-             e.currentTarget.style.boxShadow = '0 0 10px rgba(0,255,204,0.5)';
-          }}
-          onMouseOut={e => {
-             e.currentTarget.style.background = 'rgba(0, 255, 204, 0.05)';
-             e.currentTarget.style.boxShadow = 'none';
-          }}
+      <group position={[0, -0.0015, 0.0001]}>
+        <mesh 
+          onClick={(e) => { e.stopPropagation(); onClick(); }}
+          onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; e.object.material.color.setHex(0x00ffcc); e.object.material.opacity = 0.3; }}
+          onPointerOut={(e) => { e.stopPropagation(); document.body.style.cursor = 'auto'; e.object.material.color.setHex(0x00ffcc); e.object.material.opacity = 0.1; }}
         >
-          <div style={{ fontSize: '12px', marginBottom: '4px' }}>✈️</div>
-          <div style={{ fontSize: '6px', fontWeight: 'bold', letterSpacing: '1px', textAlign: 'center' }}>ENTER</div>
-          <div style={{ fontSize: '6px', fontWeight: 'bold', letterSpacing: '1px', textAlign: 'center' }}>SHOWCASE</div>
-        </div>
-      </Html>
+          <planeGeometry args={[0.007, 0.003]} />
+          <meshBasicMaterial color="#00ffcc" transparent opacity={0.1} side={THREE.DoubleSide} />
+        </mesh>
+        
+        {/* Border line */}
+        <lineSegments>
+          <edgesGeometry args={[new THREE.PlaneGeometry(0.007, 0.003)]} />
+          <lineBasicMaterial color="#00ffcc" transparent opacity={0.5} />
+        </lineSegments>
+        
+        <Text position={[0, 0.0003, 0.0001]} fontSize={0.0004} color="#fff" anchorX="center" anchorY="middle" letterSpacing={0.05}>ENTER</Text>
+        <Text position={[0, -0.0004, 0.0001]} fontSize={0.0004} color="#fff" anchorX="center" anchorY="middle" letterSpacing={0.05}>SHOWCASE</Text>
+      </group>
     </group>
   )
 }
