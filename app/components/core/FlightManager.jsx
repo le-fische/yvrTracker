@@ -14,7 +14,7 @@ export default function FlightManager({ useMetric, onSelect, selectedAircraft, s
       try {
         const data = JSON.parse(event.data);
         
-        if (data.ac && data.ac.length > 0) {
+        if (Array.isArray(data.ac)) {
           const activeTracks = data.ac.map(ac => {
             const altFeet = typeof ac.alt_geom === 'number' ? ac.alt_geom : (typeof ac.alt_baro === 'number' ? ac.alt_baro : 0)
             let parsedAltitude = Math.max(0, parseFloat(altFeet) * 0.3048)
@@ -77,6 +77,7 @@ export default function FlightManager({ useMetric, onSelect, selectedAircraft, s
                 ownOp: ac.ownOp,
                 type: inferredType,
                 category: ac.category || 'N/A',
+                registration: ac.r || null,
               status: status
             }
           }).filter(f => !isNaN(f.latitude) && !isNaN(f.longitude))

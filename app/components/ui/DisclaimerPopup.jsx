@@ -1,11 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, X } from 'lucide-react'
 
 export default function DisclaimerPopup() {
-  const [isVisible, setIsVisible] = useState(true)
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem('yvr_disclaimer_ack')) {
+        setIsVisible(true)
+      }
+    } catch (e) {
+      setIsVisible(true)
+    }
+  }, [])
+
+  const handleDismiss = () => {
+    setIsVisible(false)
+    try {
+      localStorage.setItem('yvr_disclaimer_ack', '1')
+    } catch (e) {}
+  }
 
   return (
     <AnimatePresence>
@@ -28,7 +45,7 @@ export default function DisclaimerPopup() {
             position: 'relative'
           }}>
             <button 
-              onClick={() => setIsVisible(false)}
+              onClick={handleDismiss}
               style={{
                 position: 'absolute', top: '16px', right: '16px',
                 background: 'rgba(0,255,204,0.1)', border: 'none', color: '#00ffcc',
@@ -48,8 +65,8 @@ export default function DisclaimerPopup() {
             </div>
             
             <p style={{ color: '#eef7ff', fontSize: '14px', lineHeight: '1.6', marginBottom: '16px' }}>
-              This application is for **entertainment and visualization purposes only**. 
-              The ADS-B flight data provided by `opendata.adsb.fi` may be delayed, incomplete, or inaccurate.
+              This application is for <strong>entertainment and visualization purposes only</strong>. 
+              The ADS-B flight data provided by <code style={{ background: 'rgba(0,255,204,0.1)', padding: '1px 4px', borderRadius: '3px' }}>opendata.adsb.fi</code> may be delayed, incomplete, or inaccurate.
             </p>
             
             <p style={{ color: '#ff4444', fontSize: '14px', lineHeight: '1.6', fontWeight: 'bold', marginBottom: '24px' }}>
@@ -63,7 +80,7 @@ export default function DisclaimerPopup() {
             </div>
 
             <button
-              onClick={() => setIsVisible(false)}
+              onClick={handleDismiss}
               style={{
                 width: '100%', marginTop: '20px', background: '#00ffcc', color: '#000',
                 border: 'none', padding: '12px', borderRadius: '6px', fontSize: '14px',

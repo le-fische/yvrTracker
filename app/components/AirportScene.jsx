@@ -9,6 +9,8 @@ import { useWeather } from './core/useWeather'
 import FlightManager from './core/FlightManager'
 import EnvironmentLighting from './environment/EnvironmentLighting'
 import RealYVRAirport from './environment/RealYVRAirport'
+import { DEFAULT_FOV } from './core/constants'
+import { TimeOfDayProvider } from './core/TimeOfDayContext'
 
 // Tower & Camera
 import ATCTowerInterior from './tower/ATCTowerInterior'
@@ -19,6 +21,7 @@ import ControlPanel from './ui/ControlPanel'
 import TelemetryHUD from './ui/TelemetryHUD'
 import Loader from './ui/Loader'
 import DisclaimerPopup from './ui/DisclaimerPopup'
+import RosterSidebar from './ui/RosterSidebar'
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -48,7 +51,8 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
-  const [selectedAircraft, setSelectedAircraft] = useState(null)
+  const [selectedId, setSelectedId] = useState(null)
+  const selectAircraft = React.useCallback((f) => setSelectedId(f ? f.id : null), [])
   const [useMetric, setUseMetric] = useState(false)
   const [showRoutes, setShowRoutes] = useState(false)
   const [resetCamera, setResetCamera] = useState(0)
@@ -56,6 +60,11 @@ export default function App() {
   const [chaseViewIndex, setChaseViewIndex] = useState(0)
   const [flights, setFlights] = useState([])
   const [showOpsPanel, setShowOpsPanel] = useState(false)
+
+  const selectedAircraft = useMemo(
+    () => (selectedId ? flights.find(f => f.id === selectedId) || null : null),
+    [flights, selectedId]
+  )
 
   const weather = useWeather();
   const activeRunways = useMemo(() => {
@@ -77,67 +86,76 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       const key = e.key.toLowerCase();
-      if (key === 'c' && selectedAircraft && cameraMode === 'GLOBAL') {
+      if (key === 'c' && selectedId && cameraMode === 'GLOBAL') {
         setChaseViewIndex(prev => (prev + 1) % 5)
-      } else if (key === 'x' && selectedAircraft) {
-        setSelectedAircraft(null)
+      } else if (key === 'x' && selectedId) {
+        selectAircraft(null)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedAircraft, cameraMode])
+  }, [selectedId, cameraMode, selectAircraft])
 
   useEffect(() => {
     setChaseViewIndex(0)
-  }, [selectedAircraft])
+  }, [selectedId])
 
   return (
-    <ErrorBoundary>
-      <ControlPanel 
-        showRoutes={showRoutes} setShowRoutes={setShowRoutes}
-        cameraMode={cameraMode} setCameraMode={setCameraMode}
-        useMetric={useMetric} setUseMetric={setUseMetric}
-        showOpsPanel={showOpsPanel} setShowOpsPanel={setShowOpsPanel}
-        weather={weather} activeRunways={activeRunways}
-        inboundFlights={inboundFlights} outboundFlights={outboundFlights}
-        setSelectedAircraft={setSelectedAircraft} setResetCamera={setResetCamera}
-      />
+    <TimeOfDayProvider>
+      <ErrorBoundary>
+        <ControlPanel 
+          showRoutes={showRoutes} setShowRoutes={setShowRoutes}
+          cameraMode={cameraMode} setCameraMode={setCameraMode}
+          useMetric={useMetric} setUseMetric={setUseMetric}
+          showOpsPanel={showOpsPanel} setShowOpsPanel={setShowOpsPanel}
+          weather={weather} activeRunways={activeRunways}
+          inboundFlights={inboundFlights} outboundFlights={outboundFlights}
+          setSelectedAircraft={selectAircraft} setResetCamera={setResetCamera}
+        />
 
-      <Canvas gl={{ logarithmicDepthBuffer: true }} style={{ background: '#020202' }}>
-        <PerspectiveCamera makeDefault position={[4, 10, 18]} near={0.001} far={2000} fov={85} />
-        
-        <CameraController cameraMode={cameraMode} selectedAircraftId={selectedAircraft?.id} resetTrigger={resetCamera} chaseViewIndex={chaseViewIndex} />
-        <EnvironmentLighting />
-        
-        <Suspense fallback={<Loader />}>
-          <RealYVRAirport />
-          <FlightManager 
-            useMetric={useMetric} 
-            onSelect={setSelectedAircraft} 
-            selectedAircraft={selectedAircraft}
-            showRoutes={showRoutes}
-            onFlightsUpdate={setFlights}
-          />
-          {cameraMode === 'TOWER' && !selectedAircraft && (
-            <ATCTowerInterior weather={weather} activeRunways={activeRunways} inboundFlights={inboundFlights} outboundFlights={outboundFlights} flights={flights} onSelect={setSelectedAircraft} />
-          )}
-        </Suspense>
-      </Canvas>
+        <Canvas gl={{ logarithmicDepthBuffer: true }} style={{ background: '#020202' }}>
+          <PerspectiveCamera makeDefault position={[4, 10, 18]} near={0.001} far={2000} fov={DEFAULT_FOV} />
+          
+          <CameraController cameraMode={cameraMode} selectedAircraftId={selectedAircraft?.id} resetTrigger={resetCamera} chaseViewIndex={chaseViewIndex} />
+          <EnvironmentLighting />
+          
+          <Suspense fallback={<Loader />}>
+            <RealYVRAirport />
+            <FlightManager 
+              useMetric={useMetric} 
+              onSelect={selectAircraft} 
+              selectedAircraft={selectedAircraft}
+              showRoutes={showRoutes}
+              onFlightsUpdate={setFlights}
+            />
+            {cameraMode === 'TOWER' && !selectedAircraft && (
+              <ATCTowerInterior weather={weather} activeRunways={activeRunways} inboundFlights={inboundFlights} outboundFlights={outboundFlights} flights={flights} onSelect={selectAircraft} />
+            )}
+          </Suspense>
+        </Canvas>
 
-      <DisclaimerPopup />
-      {!showOpsPanel && <TelemetryHUD aircraft={selectedAircraft} onClose={() => setSelectedAircraft(null)} useMetric={useMetric} chaseViewIndex={chaseViewIndex} />}
+        <DisclaimerPopup />
+        <RosterSidebar 
+          flights={flights} 
+          showOpsPanel={showOpsPanel} 
+          selectedAircraft={selectedAircraft} 
+          setSelectedAircraft={selectAircraft} 
+          useMetric={useMetric} 
+        />
+        {!showOpsPanel && <TelemetryHUD aircraft={selectedAircraft} onClose={() => selectAircraft(null)} useMetric={useMetric} chaseViewIndex={chaseViewIndex} />}
 
-      <style jsx global>{`
-        @keyframes pulse {
-          0% { opacity: 1; box-shadow: 0 0 10px #ff0044; }
-          50% { opacity: 0.5; box-shadow: 0 0 2px #ff0044; }
-          100% { opacity: 1; box-shadow: 0 0 10px #ff0044; }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-    </ErrorBoundary>
+        <style jsx global>{`
+          @keyframes pulse {
+            0% { opacity: 1; box-shadow: 0 0 10px #ff0044; }
+            50% { opacity: 0.5; box-shadow: 0 0 2px #ff0044; }
+            100% { opacity: 1; box-shadow: 0 0 10px #ff0044; }
+          }
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </ErrorBoundary>
+    </TimeOfDayProvider>
   )
 }

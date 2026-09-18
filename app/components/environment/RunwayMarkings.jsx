@@ -1,9 +1,17 @@
 'use client'
 
 import { useMemo } from 'react'
+import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { getPosition } from '../core/constants'
 
-function SevenSegmentChar({ char, scale = 1, color = "#00ffcc" }) {
+function buildRunwayTextGeometry(str, baseOffsetZ) {
+  const chars = str.split('')
+  const charSpacing = 0.15
+  const totalWidth = (chars.length - 1) * charSpacing
+  const startOffset = -totalWidth / 2
+  
+  const scale = 0.12
   const th = 0.15 * scale
   const w = 0.8 * scale
   const h = 1.0 * scale
@@ -33,45 +41,31 @@ function SevenSegmentChar({ char, scale = 1, color = "#00ffcc" }) {
     'R': ['A','F','E','G','B']
   }
   
-  const active = map[char] || []
+  const geometries = []
   
-  return (
-    <group>
-      {active.map(s => (
-        <mesh key={s} position={segs[s].pos}>
-          <boxGeometry args={segs[s].args} />
-          <meshBasicMaterial color={color} />
-        </mesh>
-      ))}
-      {char === 'R' && (
-        <mesh position={[w/4, 0, h/2]} rotation={[0, 0.38, 0]}>
-          <boxGeometry args={[th, th, h*1.1]} />
-          <meshBasicMaterial color={color} />
-        </mesh>
-      )}
-    </group>
-  )
+  chars.forEach((char, i) => {
+    const offsetX = startOffset + i * charSpacing
+    const active = map[char] || []
+    
+    active.forEach(s => {
+      const geom = new THREE.BoxGeometry(...segs[s].args)
+      geom.translate(segs[s].pos[0] + offsetX, segs[s].pos[1], segs[s].pos[2] + baseOffsetZ)
+      geometries.push(geom)
+    })
+    
+    if (char === 'R') {
+      const geom = new THREE.BoxGeometry(th, th, h*1.1)
+      geom.rotateY(0.38)
+      geom.translate(w/4 + offsetX, 0, h/2 + baseOffsetZ)
+      geometries.push(geom)
+    }
+  })
+  
+  return geometries
 }
 
-function RunwayText({ str, position }) {
-  const chars = str.split('')
-  const charSpacing = 0.15
-  const totalWidth = (chars.length - 1) * charSpacing
-  const startOffset = -totalWidth / 2
-  
-  return (
-    <group position={position}>
-      {chars.map((c, i) => {
-        const offset = startOffset + i * charSpacing
-        return (
-          <group key={i} position={[offset, 0, 0]}>
-             <SevenSegmentChar char={c} scale={0.12} />
-          </group>
-        )
-      })}
-    </group>
-  )
-}
+const SHARED_MATERIAL = new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.6 })
+const TEXT_MATERIAL = new THREE.MeshBasicMaterial({ color: "#00ffcc" })
 
 export default function RunwayMarkings({ aeroways }) {
   const markings = useMemo(() => {
@@ -123,8 +117,60 @@ export default function RunwayMarkings({ aeroways }) {
         const rotY0 = Math.atan2(-dirX, -dirZ)
         const rotY1 = Math.atan2(dirX, dirZ)
         
+        // Build geometries for End 0
+        const geoms0 = []
+        for(let k=-5; k<=5; k++) {
+          if (k===0) continue
+          const geom = new THREE.PlaneGeometry(0.02, 0.3)
+          geom.rotateX(-Math.PI/2)
+          geom.translate(k * 0.04, 0, -0.2)
+          geoms0.push(geom)
+        }
+        const tdzDistances = [1.5, 3.0, 4.5, 6.0]
+        tdzDistances.forEach((d, idx) => {
+          const blocks = idx === 1 ? [-0.2, -0.15, 0.15, 0.2] : (idx > 1 ? [-0.15, 0.15] : [-0.25, -0.2, 0.2, 0.25])
+          blocks.forEach(b => {
+            const geom = new THREE.PlaneGeometry(0.03, 0.25)
+            geom.rotateX(-Math.PI/2)
+            geom.translate(b, 0, -d)
+            geoms0.push(geom)
+          })
+        })
+        const numDashes = Math.floor(length / 0.5)
+        for (let j = 4; j < numDashes - 4; j += 2) {
+           const geom = new THREE.PlaneGeometry(0.015, 0.3)
+           geom.rotateX(-Math.PI/2)
+           geom.translate(0, 0, -j * 0.5)
+           geoms0.push(geom)
+        }
+        
+        const mergedMarkings0 = mergeGeometries(geoms0)
+        const mergedText0 = mergeGeometries(buildRunwayTextGeometry(str1, -0.7))
+        
+        // Build geometries for End 1
+        const geoms1 = []
+        for(let k=-5; k<=5; k++) {
+          if (k===0) continue
+          const geom = new THREE.PlaneGeometry(0.02, 0.3)
+          geom.rotateX(-Math.PI/2)
+          geom.translate(k * 0.04, 0, -0.2)
+          geoms1.push(geom)
+        }
+        tdzDistances.forEach((d, idx) => {
+          const blocks = idx === 1 ? [-0.2, -0.15, 0.15, 0.2] : (idx > 1 ? [-0.15, 0.15] : [-0.25, -0.2, 0.2, 0.25])
+          blocks.forEach(b => {
+            const geom = new THREE.PlaneGeometry(0.03, 0.25)
+            geom.rotateX(-Math.PI/2)
+            geom.translate(b, 0, -d)
+            geoms1.push(geom)
+          })
+        })
+        
+        const mergedMarkings1 = mergeGeometries(geoms1)
+        const mergedText1 = mergeGeometries(buildRunwayTextGeometry(str2, -0.7))
+
         list.push({
-          p0, p1, length, rotY0, rotY1, str1, str2
+          p0, p1, rotY0, rotY1, mergedMarkings0, mergedText0, mergedMarkings1, mergedText1
         })
       }
     })
@@ -134,60 +180,14 @@ export default function RunwayMarkings({ aeroways }) {
 
   return (
     <group position={[0, 0.022, 0]}>
-      {markings.map((rw, i) => {
-        const keys = []
-        for(let k=-5; k<=5; k++) {
-          if (k===0) continue
-          keys.push(
-            <mesh key={`tk-${k}`} position={[k * 0.04, 0, -0.2]} rotation={[-Math.PI/2, 0, 0]}>
-              <planeGeometry args={[0.02, 0.3]} />
-              <meshBasicMaterial color="#ffffff" transparent opacity={0.7} />
-            </mesh>
-          )
-        }
-
-        const tdzDistances = [1.5, 3.0, 4.5, 6.0]
-        const tdz = []
-        tdzDistances.forEach((d, idx) => {
-          const blocks = idx === 1 ? [-0.2, -0.15, 0.15, 0.2] : (idx > 1 ? [-0.15, 0.15] : [-0.25, -0.2, 0.2, 0.25])
-          blocks.forEach(b => {
-            tdz.push(
-              <mesh key={`tdz-${d}-${b}`} position={[b, 0, -d]} rotation={[-Math.PI/2, 0, 0]}>
-                <planeGeometry args={[0.03, 0.25]} />
-                <meshBasicMaterial color="#ffffff" transparent opacity={0.6} />
-              </mesh>
-            )
-          })
-        })
-
-        const centerlines = []
-        const numDashes = Math.floor(rw.length / 0.5)
-        for (let j = 4; j < numDashes - 4; j += 2) {
-           centerlines.push(
-             <mesh key={`cl-${j}`} position={[0, 0, -j * 0.5]} rotation={[-Math.PI/2, 0, 0]}>
-               <planeGeometry args={[0.015, 0.3]} />
-               <meshBasicMaterial color="#ffffff" transparent opacity={0.5} />
-             </mesh>
-           )
-        }
-        
-        return (
-          <group key={`rw-${i}`}>
-            <group position={rw.p0} rotation={[0, rw.rotY0, 0]}>
-              {keys}
-              {tdz}
-              {centerlines}
-              <RunwayText str={rw.str1} position={[0, 0, -0.7]} />
-            </group>
-
-            <group position={rw.p1} rotation={[0, rw.rotY1, 0]}>
-              {keys}
-              {tdz}
-              <RunwayText str={rw.str2} position={[0, 0, -0.7]} />
-            </group>
-          </group>
-        )
-      })}
+      {markings.map((rw, i) => (
+        <group key={`rw-${i}`}>
+          <mesh position={rw.p0} rotation={[0, rw.rotY0, 0]} geometry={rw.mergedMarkings0} material={SHARED_MATERIAL} />
+          <mesh position={rw.p0} rotation={[0, rw.rotY0, 0]} geometry={rw.mergedText0} material={TEXT_MATERIAL} />
+          <mesh position={rw.p1} rotation={[0, rw.rotY1, 0]} geometry={rw.mergedMarkings1} material={SHARED_MATERIAL} />
+          <mesh position={rw.p1} rotation={[0, rw.rotY1, 0]} geometry={rw.mergedText1} material={TEXT_MATERIAL} />
+        </group>
+      ))}
     </group>
   )
 }

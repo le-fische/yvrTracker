@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plane, Activity, Info, X, Navigation } from 'lucide-react'
+import { formatAltitude, formatSpeed } from '../core/units'
 
 export default function TelemetryHUD({ aircraft, onClose, useMetric, chaseViewIndex }) {
   return (
@@ -34,8 +35,9 @@ export default function TelemetryHUD({ aircraft, onClose, useMetric, chaseViewIn
                 <Plane size={24} color="white" />
                 <h2 style={{ margin: 0, fontSize: '26px', color: 'white', textShadow: '0 0 8px rgba(255,255,255,0.4)', letterSpacing: '1px' }}>{aircraft.callsign}</h2>
               </div>
-              <div style={{ fontSize: '12px', color: '#888', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Info size={12} /> REG: {aircraft.id.toUpperCase()}
+              <div style={{ fontSize: '12px', color: '#888', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Info size={12} /> REG: {aircraft.registration || '—'}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', paddingLeft: '16px' }}>ICAO: {aircraft.id.toUpperCase()}</div>
               </div>
             </div>
             <button onClick={onClose} style={{ background: 'rgba(0,255,204,0.1)', border: 'none', color: '#00ffcc', cursor: 'pointer', padding: '6px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }} onMouseOver={(e) => e.currentTarget.style.background = 'rgba(0,255,204,0.2)'} onMouseOut={(e) => e.currentTarget.style.background = 'rgba(0,255,204,0.1)'}>
@@ -67,8 +69,8 @@ export default function TelemetryHUD({ aircraft, onClose, useMetric, chaseViewIn
                 <Navigation size={14} /> ALTITUDE
               </div>
               <div style={{ fontSize: '20px', color: 'white', fontWeight: 'bold' }}>
-                {useMetric ? Math.round(aircraft.altitude) : Math.round(aircraft.altitude * 3.28084)} 
-                <span style={{fontSize:'12px', color:'#00ffcc', marginLeft:'4px'}}>{useMetric ? 'M' : 'FT'}</span>
+                {formatAltitude(aircraft.altitude, useMetric).value} 
+                <span style={{fontSize:'12px', color:'#00ffcc', marginLeft:'4px'}}>{formatAltitude(aircraft.altitude, useMetric).unit.toUpperCase()}</span>
               </div>
             </div>
             <div style={{ background: 'rgba(0,255,204,0.05)', border: '1px solid rgba(0,255,204,0.1)', padding: '12px', borderRadius: '8px' }}>
@@ -76,10 +78,13 @@ export default function TelemetryHUD({ aircraft, onClose, useMetric, chaseViewIn
                 <Activity size={14} /> GROUND SPEED
               </div>
               <div style={{ fontSize: '20px', color: 'white', fontWeight: 'bold' }}>
-                {useMetric ? Math.round(aircraft.velocity * 3.6) : Math.round(aircraft.velocity * 1.94384)} 
-                <span style={{fontSize:'12px', color:'#00ffcc', marginLeft:'4px'}}>{useMetric ? 'KM/H' : 'KTS'}</span>
+                {formatSpeed(aircraft.velocity, useMetric).value} 
+                <span style={{fontSize:'12px', color:'#00ffcc', marginLeft:'4px'}}>{formatSpeed(aircraft.velocity, useMetric).unit.toUpperCase()}</span>
               </div>
             </div>
+          </div>
+          <div style={{ fontSize: '10px', color: '#666', marginTop: '12px', textAlign: 'center' }}>
+            PRESS C FOR CHASE CAM · X TO DESELECT
           </div>
             </>
           )}

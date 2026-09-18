@@ -1,15 +1,22 @@
 'use client'
 
-import { useRef, useEffect, useState, useMemo, memo, Suspense } from 'react'
+import { useRef, useEffect, useState, useMemo, memo, Suspense, useContext } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Line, Html } from '@react-three/drei'
+import { Html } from '@react-three/drei'
 import * as THREE from 'three'
-import { getPosition } from '../core/constants'
+import { getPosition, SCALE } from '../core/constants'
 import GLTFAircraft from './GLTFAircraft'
+import { formatAltitude, formatSpeed } from '../core/units'
+import { TimeOfDayContext } from '../core/TimeOfDayContext'
+
+const PLAYBACK_DELAY_MS = 2500;
+const BUFFER_SIZE = 6;
+const TRAIL_POINTS = 20;
 
 const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, isSelected, useMetric }) {
   const planeRef = useRef()
   const [isHovered, setIsHovered] = useState(false)
+  const { isNight } = useContext(TimeOfDayContext)
 
   // Register plane reference for global camera tracking
   useEffect(() => {
@@ -30,7 +37,11 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
   }
   
   const bufferRef = useRef([]);
-  const [history, setHistory] = useState([]);
+  const trailPositions = useRef(new Float32Array(TRAIL_POINTS * 3));
+  const trailColorsArr = useRef(new Float32Array(TRAIL_POINTS * 3));
+  const trailCount = useRef(0);
+  const lastTrailTime = useRef(0);
+  const geomRef = useRef();
 
   useEffect(() => {
     const newPos = getClampedPos(flight.latitude, flight.longitude, flight.altitude);
@@ -43,34 +54,15 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
       velocity: flight.velocity
     });
 
-    if (bufferRef.current.length > 10) {
+    if (bufferRef.current.length > BUFFER_SIZE) {
       bufferRef.current.shift();
     }
   }, [flight.latitude, flight.longitude, flight.altitude, flight.heading, flight.velocity]);
 
-  // Sample actual rendered position every 1.5 seconds to build a smooth trail
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setHistory(prev => {
-        if (!planeRef.current) return prev;
-        const pos = planeRef.current.position.clone();
-        if (prev.length > 0) {
-          const last = prev[prev.length - 1];
-          if (last.distanceTo(pos) < 0.05) return prev;
-        }
-        const newHistory = [...prev, pos];
-        if (newHistory.length > 80) newHistory.shift(); // keep last 2 mins
-        return newHistory;
-      });
-    }, 1500);
-    return () => clearInterval(interval);
-  }, []);
-
   useFrame((state, delta) => {
     if (!planeRef.current) return;
 
-    // Playback buffer: render everything 6.0 seconds in the past for perfect interpolation
-    const renderTime = performance.now() - 6000; 
+    const renderTime = performance.now() - PLAYBACK_DELAY_MS; 
     const buffer = bufferRef.current;
 
     if (buffer.length === 0) return;
@@ -89,23 +81,18 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
     }
 
     if (found) {
-      // Interpolate exactly between p0 and p1
       const t = (renderTime - p0.time) / (p1.time - p0.time);
       planeRef.current.position.lerpVectors(p0.pos, p1.pos, t);
       
-      // Interpolate rotation
       let diff = p1.heading - p0.heading;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI) diff -= Math.PI * 2;
       planeRef.current.rotation.y = -(p0.heading + diff * t);
     } else {
-      // Out of bounds. Extrapolate or clamp.
       if (renderTime > buffer[buffer.length - 1].time) {
-        // Extrapolate forward from the last known point using velocity
         const last = buffer[buffer.length - 1];
         const dtSeconds = (renderTime - last.time) / 1000;
         
-        // velocity is in m/s, scale is 1 unit = 100 meters
         const moveDist = (last.velocity / 100) * dtSeconds;
         
         const nextPos = last.pos.clone();
@@ -115,34 +102,57 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
         planeRef.current.position.copy(nextPos);
         planeRef.current.rotation.y = -last.heading;
       } else {
-        // RenderTime is before oldest point, just snap to it
         planeRef.current.position.copy(buffer[0].pos);
         planeRef.current.rotation.y = -buffer[0].heading;
       }
     }
+
+    if (!showRoutes) return;
+
+    const now = performance.now();
+    if (now - lastTrailTime.current > 200) {
+      lastTrailTime.current = now;
+      
+      const count = trailCount.current;
+      const pts = trailPositions.current;
+      const cols = trailColorsArr.current;
+
+      const currentPos = planeRef.current.position;
+      const shouldAdd = count === 0 || 
+          Math.hypot(currentPos.x - pts[(count-1)*3], currentPos.y - pts[(count-1)*3+1], currentPos.z - pts[(count-1)*3+2]) > 0.001;
+
+      if (shouldAdd) {
+        if (count >= TRAIL_POINTS) {
+          pts.copyWithin(0, 3, TRAIL_POINTS * 3);
+          cols.copyWithin(0, 3, TRAIL_POINTS * 3);
+          trailCount.current = TRAIL_POINTS - 1;
+        }
+
+        const idx = trailCount.current * 3;
+        pts[idx] = currentPos.x;
+        pts[idx + 1] = currentPos.y;
+        pts[idx + 2] = currentPos.z;
+
+        const altMeters = (currentPos.y / SCALE) * 1000;
+        const altRatio = Math.max(0, Math.min(1, altMeters / 12000));
+        const c = new THREE.Color().setHSL(0.6 - (altRatio * 0.6), 1, 0.5);
+        cols[idx] = c.r;
+        cols[idx + 1] = c.g;
+        cols[idx + 2] = c.b;
+
+        trailCount.current++;
+
+        if (geomRef.current) {
+          geomRef.current.attributes.position.needsUpdate = true;
+          geomRef.current.attributes.color.needsUpdate = true;
+        }
+      }
+    }
+
+    if (geomRef.current) {
+      geomRef.current.setDrawRange(0, trailCount.current);
+    }
   });
-
-  const validHistory = useMemo(() => {
-    const pts = history.map(p => [p.x, p.y, p.z])
-    return pts.filter((p, i, arr) => {
-      if (i === 0) return true
-      const prev = arr[i - 1]
-      const dist = Math.hypot(p[0] - prev[0], p[1] - prev[1], p[2] - prev[2])
-      return dist > 0.001
-    })
-  }, [history])
-
-  const trailColors = useMemo(() => {
-    return validHistory.map(p => {
-      // Inverse scale to get raw altitude in meters: y = (altitude / 1000) * 10
-      const altMeters = (p[1] / 10) * 1000;
-      const altRatio = Math.max(0, Math.min(1, altMeters / 12000)); // 0m to 12,000m
-      const c = new THREE.Color();
-      // Blue (0.6) near ground -> Green (0.3) mid -> Red (0.0) high
-      c.setHSL(0.6 - (altRatio * 0.6), 1, 0.5);
-      return [c.r, c.g, c.b];
-    });
-  }, [validHistory])
 
   const [initialPos] = useState(() => {
     const pos = getClampedPos(flight.latitude, flight.longitude, flight.altitude);
@@ -152,13 +162,16 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
   // Dynamic model mapping based on ICAO type
   const modelPath = useMemo(() => {
     const t = (flight.type || '').toUpperCase()
+    const cat = flight.category
     
-    if (flight.callsign && flight.callsign.includes('FALCON')) return '/models/millennium_falcon.gltf'
-    if (flight.category === 'A7' || (t.startsWith('H') && t.length === 4)) return '/models/heli.glb'
+    // Tier 1: Exact/prefix ICAO type match
+    if (cat === 'A7' || (t.startsWith('H') && t.length === 4)) return '/models/heli.glb'
+    if (t === 'S76' || t === 'B06' || t === 'AS50' || t === 'EC30') return '/models/heli.glb'
+
     if (t.startsWith('A318')) return '/models/a318.glb'
-    if (t.startsWith('A319')) return '/models/a319.glb'
-    if (t.startsWith('A320') || t === 'A32') return '/models/a320.glb'
-    if (t.startsWith('A321')) return '/models/a321.glb'
+    if (t.startsWith('A319') || t === 'A19N') return '/models/a319.glb'
+    if (t.startsWith('A320') || t === 'A32' || t === 'A20N') return '/models/a320.glb'
+    if (t.startsWith('A321') || t === 'A21N') return '/models/a321.glb'
     if (t.startsWith('A332') || t.startsWith('A33')) return '/models/a332.glb'
     if (t.startsWith('A333')) return '/models/a333.glb'
     if (t.startsWith('A343') || t.startsWith('A34')) return '/models/a343.glb'
@@ -166,7 +179,7 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
     if (t.startsWith('A359') || t.startsWith('A35')) return '/models/a359.glb'
     if (t.startsWith('A380') || t.startsWith('A38')) return '/models/a380.glb'
     
-    if (t.startsWith('B736')) return '/models/b736.glb'
+    if (t.startsWith('B736') || t === 'B37M') return '/models/b736.glb'
     if (t.startsWith('B737')) return '/models/b737.glb'
     if (t.startsWith('B738') || t.startsWith('B38')) return '/models/b738.glb'
     if (t.startsWith('B739') || t.startsWith('B39')) return '/models/b739.glb'
@@ -186,25 +199,35 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
     if (t.startsWith('CRJ7')) return '/models/crj700.glb'
     if (t.startsWith('CRJ')) return '/models/crj900.glb'
     if (t.startsWith('E17') || t.startsWith('E75')) return '/models/e170.glb'
-    if (t.startsWith('E19') || t.startsWith('E19')) return '/models/e190.glb'
-    if (t.startsWith('AT4') || t.startsWith('ATR') || t.startsWith('B190') || t.startsWith('BE')) return '/models/atr42.glb'
-    if (t.startsWith('BCS1')) return '/models/cs100.glb'
-    if (t.startsWith('BCS3') || t.startsWith('BCS')) return '/models/cs300.glb'
-    if (t.startsWith('DH8D') || t === 'Q400' || t.startsWith('DH8')) return '/models/q400.glb'
-    if (t.startsWith('PA28') || t.startsWith('P28') || t.startsWith('C1') || t.startsWith('C20')) return '/models/pa28.glb' 
-    if (t.startsWith('C2') || t.startsWith('C5') || t.startsWith('C6') || t.startsWith('C7') || t.startsWith('GLF') || t.startsWith('FA') || t.startsWith('E5')) return '/models/citation.glb' 
+    if (t.startsWith('E19') || t === 'E290' || t === 'E295') return '/models/e190.glb'
+    if (t.startsWith('AT4') || t.startsWith('ATR') || t.startsWith('B190') || t.startsWith('BE') || t === 'B350') return '/models/atr42.glb'
+    if (t.startsWith('BCS1') || t === 'A221') return '/models/cs100.glb'
+    if (t.startsWith('BCS3') || t.startsWith('BCS') || t === 'A223') return '/models/cs300.glb'
+    if (t.startsWith('DH8D') || t === 'Q400' || t.startsWith('DH8') || t === 'C208') return '/models/q400.glb'
+    if (t.startsWith('PA28') || t.startsWith('P28') || t.startsWith('C1') || t.startsWith('C20') || t === 'C210' || t === 'PC12') return '/models/pa28.glb' 
+    if (t.startsWith('C2') || t.startsWith('C5') || t.startsWith('C6') || t.startsWith('C7') || t.startsWith('GLF') || t.startsWith('FA') || t.startsWith('E5') || t === 'CL30' || t === 'CL35' || t === 'CL60' || t === 'GLEX' || t === 'GL7T') return '/models/citation.glb' 
     if (t === 'A3ST') return '/models/beluga.glb'
     if (t.startsWith('RJ') || t.startsWith('BAE')) return '/models/bae146.glb'
     if (t.startsWith('ASK') || t.startsWith('GLID')) return '/models/ask21.glb'
-    if (t === 'A225') return '/models/an225.gltf'
+    if (t === 'A225') return '/models/an225.glb'
     
-    // Inferred Category Fallbacks
+    // Inferred String Fallbacks
     if (t === 'LIGHT AIRCRAFT' || t === 'HIGH PERFORMANCE') return '/models/pa28.glb'
     if (t === 'SMALL COMMUTER') return '/models/q400.glb'
     if (t === 'LARGE JET' || t === 'HIGH VORTEX JET') return '/models/b738.glb'
     if (t === 'HEAVY JET') return '/b777_final.glb'
     if (t === 'HELICOPTER') return '/models/heli.glb'
     
+    // Tier 2: Category Fallback
+    if (cat === 'A1') return '/models/pa28.glb'
+    if (cat === 'A2') return '/models/q400.glb'
+    if (cat === 'A3') return '/models/b738.glb'
+    if (cat === 'A4') return '/models/b763.glb'
+    if (cat === 'A5') return '/models/b773.glb'
+    if (cat === 'A6') return '/models/citation.glb'
+    if (cat === 'A7') return '/models/heli.glb'
+
+    // Tier 3: Final Default
     return '/b777_final.glb'
   }, [flight.type, flight.callsign, flight.category])
 
@@ -214,7 +237,7 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
         <mesh visible={false}><sphereGeometry args={[1.5]} /><meshBasicMaterial /></mesh>
 
         <Suspense fallback={null}>
-          <GLTFAircraft modelPath={modelPath} scale={0.01} position={[0, -0.05, 0]} isNight={typeof window !== 'undefined' ? window.isNightTime : false} />
+          <GLTFAircraft modelPath={modelPath} scale={0.01} position={[0, -0.05, 0]} isNight={isNight} />
         </Suspense>
         
         {!isSelected && (
@@ -249,8 +272,8 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
               </div>
               {isHovered && (
                 <>
-                  <div style={{ color: '#aaa' }}>{useMetric ? Math.round(flight.altitude) : Math.round(flight.altitude * 3.28084)} {useMetric ? 'm' : 'ft'}</div>
-                  <div style={{ fontSize: '9px', color: '#aaa' }}>{useMetric ? Math.round(flight.velocity * 3.6) : Math.round(flight.velocity * 1.94384)} {useMetric ? 'km/h' : 'kts'}</div>
+                  <div style={{ color: '#aaa' }}>{formatAltitude(flight.altitude, useMetric).value} {formatAltitude(flight.altitude, useMetric).unit}</div>
+                  <div style={{ fontSize: '9px', color: '#aaa' }}>{formatSpeed(flight.velocity, useMetric).value} {formatSpeed(flight.velocity, useMetric).unit}</div>
                 </>
               )}
             </div>
@@ -258,8 +281,20 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
         )}
       </group>
       
-      {showRoutes && validHistory.length > 1 && (
-        <Line points={validHistory} vertexColors={trailColors} lineWidth={isSelected ? 3 : 2} transparent opacity={isSelected ? 0.8 : 0.4} />
+      {showRoutes && (
+        <line>
+          <bufferGeometry ref={geomRef}>
+            <bufferAttribute
+              attach="attributes-position"
+              args={[trailPositions.current, 3]}
+            />
+            <bufferAttribute
+              attach="attributes-color"
+              args={[trailColorsArr.current, 3]}
+            />
+          </bufferGeometry>
+          <lineBasicMaterial attach="material" vertexColors transparent opacity={isSelected ? 0.8 : 0.4} />
+        </line>
       )}
     </group>
   )

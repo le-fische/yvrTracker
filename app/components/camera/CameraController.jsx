@@ -4,11 +4,11 @@ import { useRef, useEffect } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
+import { DEFAULT_FOV } from '../core/constants'
 
 export default function CameraController({ cameraMode, selectedAircraftId, resetTrigger, chaseViewIndex }) {
   const controlsRef = useRef()
   const { camera, gl } = useThree()
-  const defaultFov = useRef(75)
 
   useEffect(() => {
     const handleWheel = (e) => {
@@ -16,7 +16,7 @@ export default function CameraController({ cameraMode, selectedAircraftId, reset
         e.preventDefault()
         e.stopPropagation()
         camera.fov += e.deltaY * 0.05
-        camera.fov = Math.max(2, Math.min(camera.fov, 75))
+        camera.fov = Math.max(2, Math.min(camera.fov, DEFAULT_FOV))
         camera.updateProjectionMatrix()
       }
     }
@@ -27,7 +27,7 @@ export default function CameraController({ cameraMode, selectedAircraftId, reset
 
   useEffect(() => {
     if (cameraMode !== 'TOWER') {
-      camera.fov = defaultFov.current
+      camera.fov = DEFAULT_FOV
       camera.updateProjectionMatrix()
     }
   }, [cameraMode, camera])

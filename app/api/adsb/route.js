@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+import { YVR_LAT, YVR_LON } from '../../components/core/constants.js';
 
 // Global cache to prevent multiple streams from hammering the external API
 let cachedData = null;
@@ -14,7 +15,7 @@ async function fetchAdsbData() {
 
   isFetching = true;
   try {
-    const res = await fetch('https://opendata.adsb.fi/api/v3/lat/49.1947/lon/-123.1839/dist/50');
+    const res = await fetch(`https://opendata.adsb.fi/api/v3/lat/${YVR_LAT}/lon/${YVR_LON}/dist/50`);
     if (res.ok) {
       cachedData = await res.json();
       // add a server timestamp so clients know exactly when this data was fetched

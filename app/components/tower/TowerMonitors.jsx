@@ -4,6 +4,8 @@ import { useRef, useState, useMemo, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Text, Html } from '@react-three/drei'
 import * as THREE from 'three'
+import { formatAltitude, formatSpeed } from '../core/units'
+import { YVR_LAT, YVR_LON, KM_PER_DEG_LAT, KM_PER_DEG_LON } from '../core/constants'
 
 export function ConsoleMachine({ position, rotation, children, empty }) {
   return (
@@ -30,8 +32,6 @@ export function ConsoleMachine({ position, rotation, children, empty }) {
 export function RadarMonitor({ flights }) {
   const sweepRef = useRef()
   const blipsRef = useRef()
-  const YVR_LAT = 49.1939;
-  const YVR_LON = -123.1840;
   const maxRadius = 0.002;
   
   useFrame((state) => {
@@ -57,8 +57,8 @@ export function RadarMonitor({ flights }) {
         
         <group ref={blipsRef}>
           {flights && flights.map(f => {
-            const dx = (f.longitude - YVR_LON) * 73; 
-            const dy = (f.latitude - YVR_LAT) * 111; 
+            const dx = (f.longitude - YVR_LON) * KM_PER_DEG_LON; 
+            const dy = (f.latitude - YVR_LAT) * KM_PER_DEG_LAT; 
             const scale = maxRadius / 150; 
             const rx = dx * scale;
             const ry = dy * scale;
@@ -80,8 +80,8 @@ export function TargetLockMonitor({ flights }) {
   const closest = useMemo(() => {
     if (!flights || flights.length === 0) return null;
     return flights.slice().sort((a,b) => {
-      const distA = Math.hypot(a.latitude - 49.1939, a.longitude - -123.1840)
-      const distB = Math.hypot(b.latitude - 49.1939, b.longitude - -123.1840)
+      const distA = Math.hypot((a.latitude - YVR_LAT) * KM_PER_DEG_LAT, (a.longitude - YVR_LON) * KM_PER_DEG_LON)
+      const distB = Math.hypot((b.latitude - YVR_LAT) * KM_PER_DEG_LAT, (b.longitude - YVR_LON) * KM_PER_DEG_LON)
       return distA - distB
     })[0]
   }, [flights])
@@ -95,10 +95,10 @@ export function TargetLockMonitor({ flights }) {
           <Text position={[-0.004, 0.0003, 0]} fontSize={0.0006} color="#fff" anchorX="left" anchorY="top">{closest.callsign}</Text>
           
           <Text position={[-0.004, -0.0005, 0]} fontSize={0.00025} color="#888" anchorX="left" anchorY="top">ALTITUDE</Text>
-          <Text position={[-0.004, -0.001, 0]} fontSize={0.0004} color="#00ffcc" anchorX="left" anchorY="top">{Math.round(closest.altitude)} ft</Text>
+          <Text position={[-0.004, -0.001, 0]} fontSize={0.0004} color="#00ffcc" anchorX="left" anchorY="top">{formatAltitude(closest.altitude, false).value} {formatAltitude(closest.altitude, false).unit}</Text>
           
           <Text position={[0.001, -0.0005, 0]} fontSize={0.00025} color="#888" anchorX="left" anchorY="top">GROUND SPD</Text>
-          <Text position={[0.001, -0.001, 0]} fontSize={0.0004} color="#00ffcc" anchorX="left" anchorY="top">{Math.round(closest.velocity)} kts</Text>
+          <Text position={[0.001, -0.001, 0]} fontSize={0.0004} color="#00ffcc" anchorX="left" anchorY="top">{formatSpeed(closest.velocity, false).value} {formatSpeed(closest.velocity, false).unit}</Text>
         </group>
       ) : (
         <Text position={[-0.004, 0.0005, 0]} fontSize={0.0003} color="#888" anchorX="left" anchorY="top">NO TARGETS</Text>
