@@ -15,6 +15,7 @@ import { TimeOfDayProvider } from './core/TimeOfDayContext'
 // Tower & Camera
 import ATCTowerInterior from './tower/ATCTowerInterior'
 import CameraController from './camera/CameraController'
+import { CAMERA_VIEWS } from './camera/views'
 
 // UI
 import ControlPanel from './ui/ControlPanel'
@@ -87,7 +88,7 @@ export default function App() {
     const handleKeyDown = (e) => {
       const key = e.key.toLowerCase();
       if (key === 'c' && selectedId && cameraMode === 'GLOBAL') {
-        setChaseViewIndex(prev => (prev + 1) % 5)
+        setChaseViewIndex(prev => (prev + 1) % CAMERA_VIEWS.length)
       } else if (key === 'x' && selectedId) {
         selectAircraft(null)
       }
@@ -142,7 +143,7 @@ export default function App() {
           setSelectedAircraft={selectAircraft} 
           useMetric={useMetric} 
         />
-        {!showOpsPanel && <TelemetryHUD aircraft={selectedAircraft} onClose={() => selectAircraft(null)} useMetric={useMetric} chaseViewIndex={chaseViewIndex} />}
+        {!showOpsPanel && <TelemetryHUD aircraft={selectedAircraft} onClose={() => selectAircraft(null)} useMetric={useMetric} chaseViewIndex={chaseViewIndex} setChaseViewIndex={setChaseViewIndex} />}
 
         <style jsx global>{`
           @keyframes pulse {

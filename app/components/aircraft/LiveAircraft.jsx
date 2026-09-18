@@ -237,7 +237,17 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
         <mesh visible={false}><sphereGeometry args={[1.5]} /><meshBasicMaterial /></mesh>
 
         <Suspense fallback={null}>
-          <GLTFAircraft modelPath={modelPath} scale={0.01} position={[0, -0.05, 0]} isNight={isNight} />
+          <GLTFAircraft 
+            modelPath={modelPath} 
+            scale={0.01} 
+            position={[0, -0.05, 0]} 
+            isNight={isNight} 
+            onMetrics={(m) => {
+              if (planeRef.current) {
+                planeRef.current.userData.metrics = m
+              }
+            }} 
+          />
         </Suspense>
         
         {!isSelected && (

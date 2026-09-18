@@ -5,10 +5,53 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { DEFAULT_FOV } from '../core/constants'
+import { CAMERA_VIEWS } from './views'
 
 export default function CameraController({ cameraMode, selectedAircraftId, resetTrigger, chaseViewIndex }) {
   const controlsRef = useRef()
   const { camera, gl } = useThree()
+  
+  const lookRefs = useRef({ yaw: 0, pitch: 0, isDragging: false, lastX: 0, lastY: 0 })
+
+  useEffect(() => {
+    const dom = gl.domElement;
+    const onDown = (e) => {
+      if (chaseViewIndex > 0) {
+        lookRefs.current.isDragging = true;
+        lookRefs.current.lastX = e.clientX;
+        lookRefs.current.lastY = e.clientY;
+      }
+    };
+    const onMove = (e) => {
+      if (lookRefs.current.isDragging && chaseViewIndex > 0) {
+        const dx = e.clientX - lookRefs.current.lastX;
+        const dy = e.clientY - lookRefs.current.lastY;
+        lookRefs.current.lastX = e.clientX;
+        lookRefs.current.lastY = e.clientY;
+        
+        lookRefs.current.yaw -= dx * 0.005;
+        lookRefs.current.pitch -= dy * 0.005;
+        // Clamp pitch to +/- 70 degrees
+        lookRefs.current.pitch = Math.max(-1.2, Math.min(1.2, lookRefs.current.pitch));
+      }
+    };
+    const onUp = () => { lookRefs.current.isDragging = false; };
+    
+    dom.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      dom.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [gl, chaseViewIndex])
+
+  // Reset look on aircraft or view change
+  useEffect(() => {
+    lookRefs.current.yaw = 0;
+    lookRefs.current.pitch = 0;
+  }, [selectedAircraftId, chaseViewIndex])
 
   useEffect(() => {
     const handleWheel = (e) => {
@@ -83,24 +126,56 @@ export default function CameraController({ cameraMode, selectedAircraftId, reset
           controls.target.copy(planePos);
         }
         
-        if (chaseViewIndex > 0) {
+        if (chaseViewIndex > 0 && CAMERA_VIEWS[chaseViewIndex]) {
           controls.enabled = false;
-          const offset = new THREE.Vector3();
+          const view = CAMERA_VIEWS[chaseViewIndex];
+          const metrics = aircraftRef.userData.metrics;
           
-          if (chaseViewIndex === 1) offset.set(0, 0.4, 1.2); 
-          else if (chaseViewIndex === 2) offset.set(-1.0, 0.2, 0); 
-          else if (chaseViewIndex === 3) offset.set(1.0, 0.2, 0); 
-          else if (chaseViewIndex === 4) offset.set(0, 0.1, -1.2); 
+          let offset = new THREE.Vector3();
+          
+          if (view.id === 'COCKPIT' || view.id === 'TAIL') {
+             if (metrics) {
+                if (view.id === 'COCKPIT') {
+                   // A fraction ahead of the nose (nose is minZ because forward is -Z)
+                   // Y offset is slightly up from center.
+                   offset.set(0, 0.05, metrics.minZ - 0.02);
+                } else if (view.id === 'TAIL') {
+                   // Above the fin (maxY), behind the fin (maxZ)
+                   offset.set(0, metrics.maxY + 0.1, metrics.maxZ + 0.1);
+                }
+             }
+          } else if (view.offset) {
+             offset.fromArray(view.offset);
+          }
           
           offset.applyQuaternion(aircraftRef.quaternion);
           const targetCamPos = planePos.clone().add(offset);
-          
           camera.position.copy(targetCamPos);
           
-          const targetRotation = new THREE.Quaternion().setFromRotationMatrix(
-            new THREE.Matrix4().lookAt(camera.position, planePos, camera.up)
-          );
-          camera.quaternion.copy(targetRotation);
+          const { yaw, pitch } = lookRefs.current;
+          
+          if (view.lookAt === 'forward') {
+             // Forward vector in world space (-Z locally)
+             const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(aircraftRef.quaternion);
+             const lookTarget = targetCamPos.clone().add(forward);
+             const targetRotation = new THREE.Quaternion().setFromRotationMatrix(
+                new THREE.Matrix4().lookAt(camera.position, lookTarget, camera.up)
+             );
+             // Apply free look offsets
+             const euler = new THREE.Euler().setFromQuaternion(targetRotation, 'YXZ');
+             euler.y += yaw;
+             euler.x += pitch;
+             camera.quaternion.setFromEuler(euler);
+          } else {
+             // 'aircraft' lookAt
+             const targetRotation = new THREE.Quaternion().setFromRotationMatrix(
+               new THREE.Matrix4().lookAt(camera.position, planePos, camera.up)
+             );
+             const euler = new THREE.Euler().setFromQuaternion(targetRotation, 'YXZ');
+             euler.y += yaw;
+             euler.x += pitch;
+             camera.quaternion.setFromEuler(euler);
+          }
         } else {
           controls.enabled = true;
           controls.enableZoom = true;

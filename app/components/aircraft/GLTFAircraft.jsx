@@ -9,7 +9,7 @@ const WIREFRAME_MATERIAL = new THREE.MeshBasicMaterial({
   color: '#00ffcc', wireframe: true, transparent: true, opacity: 0.5
 })
 
-export default function GLTFAircraft({ scale, position, modelPath, isNight }) {
+export default function GLTFAircraft({ scale, position, modelPath, isNight, onMetrics }) {
   const { scene } = useGLTF(modelPath, '/draco/')
   const [metrics, setMetrics] = useState(null)
   
@@ -23,11 +23,20 @@ export default function GLTFAircraft({ scale, position, modelPath, isNight }) {
     
     const box = new THREE.Box3().setFromObject(scene)
     if (!box.isEmpty()) {
-       setMetrics({
+       const m = {
          minX: box.min.x, maxX: box.max.x,
          minY: box.min.y, maxY: box.max.y,
          minZ: box.min.z, maxZ: box.max.z
-       })
+       }
+       setMetrics(m)
+       
+       if (onMetrics) {
+         onMetrics({
+           minX: m.minX * scale, maxX: m.maxX * scale,
+           minY: m.minY * scale, maxY: m.maxY * scale,
+           minZ: m.minZ * scale, maxZ: m.maxZ * scale
+         })
+       }
     }
   }, [scene])
 

@@ -3,8 +3,9 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plane, Activity, Info, X, Navigation } from 'lucide-react'
 import { formatAltitude, formatSpeed } from '../core/units'
+import { CAMERA_VIEWS } from '../camera/views'
 
-export default function TelemetryHUD({ aircraft, onClose, useMetric, chaseViewIndex }) {
+export default function TelemetryHUD({ aircraft, onClose, useMetric, chaseViewIndex, setChaseViewIndex }) {
   return (
     <AnimatePresence>
       {aircraft && (
@@ -21,14 +22,6 @@ export default function TelemetryHUD({ aircraft, onClose, useMetric, chaseViewIn
             boxShadow: '0 8px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)'
           }}
         >
-          {chaseViewIndex > 0 ? (
-            <div style={{ textAlign: 'center', fontSize: '11px', color: '#aaa', padding: '8px' }}>
-              <div style={{ color: 'white', fontWeight: 'bold', fontSize: '14px', marginBottom: '8px' }}>CINEMATIC CHASE MODE</div>
-              <div>Press <b>C</b> to cycle camera views</div>
-              <div style={{ marginTop: '4px' }}>Press <b>X</b> to exit tracking</div>
-            </div>
-          ) : (
-            <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid rgba(0,255,204,0.2)', paddingBottom: '16px', marginBottom: '16px' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -58,9 +51,36 @@ export default function TelemetryHUD({ aircraft, onClose, useMetric, chaseViewIn
             <Activity size={16} /> [ {aircraft.status || 'UNKNOWN'} ]
           </div>
           
-          <div style={{ fontSize: '14px', marginBottom: '20px', color: '#eef7ff', padding: '12px', background: 'rgba(0,0,0,0.4)', borderRadius: '8px' }}>
+          <div style={{ fontSize: '14px', marginBottom: '16px', color: '#eef7ff', padding: '12px', background: 'rgba(0,0,0,0.4)', borderRadius: '8px' }}>
             <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>{aircraft.desc || 'Unknown Aircraft'}</div>
             <div style={{ fontSize: '12px', color: '#aaa' }}>{aircraft.ownOp || 'Unknown Operator'}</div>
+          </div>
+          
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ fontSize: '10px', color: '#888', marginBottom: '8px', letterSpacing: '1px' }}>CAMERA VIEW (PRESS C)</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
+              {CAMERA_VIEWS.map((view, idx) => (
+                <button
+                  key={view.id}
+                  onClick={() => setChaseViewIndex && setChaseViewIndex(idx)}
+                  style={{
+                    background: chaseViewIndex === idx ? 'rgba(0,255,204,0.3)' : 'rgba(0,0,0,0.4)',
+                    border: `1px solid ${chaseViewIndex === idx ? '#00ffcc' : 'rgba(0,255,204,0.1)'}`,
+                    color: chaseViewIndex === idx ? '#fff' : '#aaa',
+                    padding: '6px 4px',
+                    borderRadius: '4px',
+                    fontSize: '9px',
+                    cursor: 'pointer',
+                    fontFamily: 'monospace',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseOver={(e) => { if (chaseViewIndex !== idx) e.currentTarget.style.background = 'rgba(0,255,204,0.1)' }}
+                  onMouseOut={(e) => { if (chaseViewIndex !== idx) e.currentTarget.style.background = 'rgba(0,0,0,0.4)' }}
+                >
+                  {view.label}
+                </button>
+              ))}
+            </div>
           </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '12px' }}>
@@ -84,10 +104,8 @@ export default function TelemetryHUD({ aircraft, onClose, useMetric, chaseViewIn
             </div>
           </div>
           <div style={{ fontSize: '10px', color: '#666', marginTop: '12px', textAlign: 'center' }}>
-            PRESS C FOR CHASE CAM · X TO DESELECT
+            {chaseViewIndex > 0 && CAMERA_VIEWS[chaseViewIndex]?.id === 'COCKPIT' ? 'DRAG TO LOOK AROUND · ' : ''}PRESS X TO DESELECT
           </div>
-            </>
-          )}
         </motion.div>
       )}
     </AnimatePresence>
