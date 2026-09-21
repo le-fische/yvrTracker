@@ -1096,6 +1096,211 @@ you are flying with the aircraft.
 
 ---
 
+## Review of the showcase / roster / camera batch
+
+### 21. `AircraftShowcase` permanently replaces live aircraft materials
+
+**P0. Visiting the showcase turns live aircraft chrome-white until a page reload.**
+
+**File:** `app/components/aircraft/AircraftShowcase.jsx:30-40`
+
+`ModelViewer` traverses the scene returned by `useGLTF` and assigns a brand new
+`MeshStandardMaterial` to every mesh, in the render body, with no guard and no restore:
+
+```js
+scene.traverse(child => {
+  if (child.isMesh) {
+    child.material = new THREE.MeshStandardMaterial({ color: '#eef7ff', ... })
+  }
+})
+```
+
+`useGLTF` caches by path **globally**. That is the same object `GLTFAircraft` mutates, and its guard is:
+
+```js
+if (child.isMesh && !child.userData.hasEdges) {     // GLTFAircraft.jsx:18
+  child.material = WIREFRAME_MATERIAL
+  child.userData.hasEdges = true
+}
+```
+
+The showcase never touches `hasEdges`, so once it is set the wireframe assignment is skipped forever.
+
+It compounds: `AirportScene.jsx:122-143` renders the showcase **instead of** the main scene, so leaving
+the showcase remounts `FlightManager` and every `LiveAircraft`. Each `GLTFAircraft` re-runs the traverse,
+hits the stale `hasEdges`, and keeps the chrome material. drei's `<Clone>` copies `material` by reference
+(`drei/core/Clone.js:19`, only deep-cloned when `deep` is set, which it is not), so the clones pick it up
+too.
+
+**All 14 showcase models are also live-scene models** (`a320 a333 a343 a359 a380 b738 b744 b763 b773
+b789 q400 crj900 e190 citation`). Page through the showcase and the corresponding traffic comes back
+chrome.
+
+**Change:** do not mutate the cached scene. Clone once and mutate the clone, with one shared material:
+
+```js
+const SHOWCASE_MATERIAL = new THREE.MeshStandardMaterial({
+  color: '#eef7ff', roughness: 0.3, metalness: 0.8, envMapIntensity: 1.5,
+})
+
+const showcaseScene = useMemo(() => {
+  const s = scene.clone(true)
+  let maxDim = 0
+  const box = new THREE.Box3().setFromObject(s)
+  const size = new THREE.Vector3(); box.getSize(size)
+  maxDim = Math.max(size.x, size.y, size.z)
+  s.traverse(c => { if (c.isMesh) c.material = SHOWCASE_MATERIAL })
+  return { scene: s, scale: 5 / maxDim }
+}, [scene])
+```
+
+`Object3D.clone()` creates new `Mesh` instances sharing geometry, so assigning `material` on the clone
+does not reach the cache. Render `<primitive object={showcaseScene.scene} />`.
+
+This also fixes two smaller things in the same block: a `MeshStandardMaterial` was allocated **per mesh
+per render** and never disposed (the item 15 bug, reintroduced), and `new THREE.Box3().setFromObject(scene)`
+at line 24 ran a full scene traversal on every render.
+
+**Verify:** note the callsign of a live A320 or 738. Enter the showcase, page to that type, exit. Every
+aircraft of that type must still be cyan wireframe. Today they are chrome.
+
+---
+
+### 22. `<Environment preset="city" />` pulls an HDRI from a CDN
+
+**File:** `app/components/aircraft/AircraftShowcase.jsx:62`
+
+drei's `Environment` with a `preset` fetches the HDRI from `raw.githack.com/pmndrs/drei-assets`. That is
+an external network dependency, which contradicts the deliberate decision in item 11 to self-host the
+Draco decoder, and it will simply fail offline.
+
+**Change:** drop it. The two spotlights at lines 60-61 already light the model, and `envMapIntensity` on a
+material with no env map does nothing. If the reflections are wanted, self-host one `.hdr` in `public/`
+and pass `files=`.
+
+**Verify:** open the showcase with devtools Network throttled to offline. It must render.
+
+---
+
+### 23. Free look is active in every fixed view, not just cockpit
+
+**Files:** `app/components/camera/CameraController.jsx` (pointer handler and the `yaw`/`pitch` application)
+
+Agreed scope for item 20.4 was cockpit-only. The pointer handler gates on `chaseViewIndex > 0`, and the
+`yaw` / `pitch` offsets are applied in **both** the `'forward'` and `'aircraft'` branches, so CHASE,
+WING L, WING R and LEAD are draggable too.
+
+The HUD disagrees with the code: `TelemetryHUD.jsx:107` shows `DRAG TO LOOK AROUND` only when the view is
+`COCKPIT`. So four views respond to a drag that nothing tells the user about.
+
+**Change:** pick one and make both agree. Gate on
+`CAMERA_VIEWS[chaseViewIndex]?.id === 'COCKPIT'` in the handler and around the euler offsets, or keep it
+everywhere and show the hint for every fixed view. Cockpit-only was the agreed scope.
+
+---
+
+### 24. Cockpit and tail are only half size-aware
+
+**File:** `app/components/camera/CameraController.jsx:136-146`
+
+```js
+offset.set(0, 0.05, metrics.minZ - 0.02)               // COCKPIT
+offset.set(0, metrics.maxY + 0.1, metrics.maxZ + 0.1)  // TAIL
+```
+
+The Z terms use the bounding box, which is the point of item 20.2. The rest are fixed: cockpit sits a
+flat `0.05` units (**5 m**) above the aircraft origin regardless of type, and tail pads by `0.1` units
+(**10 m**) above and behind the fin. On a 777 those read fine. On a PA28 the cockpit floats about 10 m
+above a 2.5 m aeroplane, and the tail cam is 10 m back, which is a chase shot.
+
+That is exactly the acceptance test for 20.2 and it currently fails: *cockpit on a 777 and on a PA28 must
+both sit just ahead of the nose.*
+
+**Change:** make the remaining terms proportional, e.g.
+`offset.set(0, (metrics.maxY - metrics.minY) * 0.55, metrics.minZ - lengthZ * 0.02)` for cockpit and a
+`lengthZ * 0.05` pad for tail, where `lengthZ = metrics.maxZ - metrics.minZ`.
+
+**Also:** when `metrics` is undefined (model still loading), `offset` stays `(0,0,0)` and the camera sits
+inside the aircraft at its origin. Fall back to the CHASE offset until metrics arrive.
+
+---
+
+### 24b. The cockpit and tail Y offsets are in the wrong coordinate space
+
+**Found reviewing the item 24 fix. The Z terms are right; Y is computed in model space and used in
+aircraft space.**
+
+**File:** `app/components/camera/CameraController.jsx:141,144`
+
+```js
+offset.set(0, metrics.minY + height * 0.45, metrics.minZ - length * 0.05)   // COCKPIT
+offset.set(0, metrics.maxY + height * 0.5,  metrics.maxZ + length * 0.2)    // TAIL
+```
+
+`offset` is relative to `planeRef`. But `GLTFAircraft` does not render the model at its raw box position
+(`GLTFAircraft.jsx:44-46`):
+
+```jsx
+<group scale={scale} position={[0, -0.05, 0]}>
+  <group position={[0, -metrics.minY, 0]}>     // raw minY, inside the scaled group
+```
+
+So a model point at local `Y` lands at `(Y - minY_raw) * scale - 0.05` in `planeRef` space. The model's
+**bottom is always at -0.05**, never at `metrics.minY`. The `-minY` shift and the `-0.05` drop are both
+unaccounted for, so the camera is displaced by exactly `metrics.minY + 0.05`.
+
+Z is fine because the inner group only shifts Y, so `metrics.minZ` is genuinely the nose in `planeRef`
+space.
+
+Measured against the actual GLBs (positions read with `@gltf-transform`, `scale = 0.01`):
+
+```
+        minY      height    cockpit y now   should be   error
+b773   -0.2107    0.4210      -0.0213        0.1394     -16.1 m
+pa28   -0.0527    0.1368       0.0089        0.0116      -0.3 m
+a320   -0.0106    0.1191       0.0430        0.0036      +3.9 m
+q400   -0.0179    0.1007       0.0274       -0.0047      +3.2 m
+```
+
+The sign and magnitude vary per model because each GLB was authored with a different origin. On the 777
+the cockpit sits 16 m below where it should, which is under the fuselage. That is the same
+per-model-variation problem item 20.2 existed to remove, just moved from Z to Y.
+
+**Why it happened:** `AircraftLights` legitimately uses `metrics.minY + height * f`, because it renders
+*inside* the `-minY` group, in model space. Copying that idiom into `CameraController`, which works in
+`planeRef` space, is the bug.
+
+**Change:** drop `metrics.minY` / `metrics.maxY` from the Y terms and measure from the known rendered
+bottom instead:
+
+```js
+offset.set(0, -0.05 + height * 0.45, metrics.minZ - length * 0.05)   // COCKPIT
+offset.set(0, -0.05 + height * 1.5,  metrics.maxZ + length * 0.2)    // TAIL
+```
+
+The `-0.05` is the `position` prop passed to `GLTFAircraft` at `LiveAircraft.jsx:241`. Import it from a
+shared constant rather than duplicating the literal in two files.
+
+**Verify:** COCKPIT on a b773 and on a pa28 must both sit just above the nose looking forward. This is the
+item 20.2 acceptance test and it currently fails on the 777.
+
+---
+
+### 24c. Dead `Environment` import
+
+**File:** `app/components/aircraft/AircraftShowcase.jsx:5`
+
+The `<Environment preset="city" />` element was removed for item 22, but `Environment` is still imported
+from `@react-three/drei`. `npx eslint app/` reports it:
+
+```
+5:40  warning  'Environment' is defined but never used  no-unused-vars
+```
+
+Drop it from the import list. One line.
+
+---
+
 ## Repo hygiene (do last, one commit)
 
 Not behavioral, but it is making the tree hard to read.
