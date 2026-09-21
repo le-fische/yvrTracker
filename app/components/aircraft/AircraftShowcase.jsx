@@ -10,9 +10,31 @@ const MODELS = [
   'a320', 'a333', 'a343', 'a359', 'a380', 'b738', 'b744', 'b763', 'b773', 'b789', 'q400', 'crj900', 'e190', 'citation'
 ]
 
+const SHOWCASE_MATERIAL = new THREE.MeshStandardMaterial({
+  color: '#eef7ff',
+  roughness: 0.3,
+  metalness: 0.8,
+})
+
 function ModelViewer({ modelName }) {
   const { scene } = useGLTF(`/models/${modelName}.glb`, '/draco/')
   const groupRef = useRef()
+
+  const { clone, scale } = React.useMemo(() => {
+    const c = scene.clone()
+    c.traverse(child => {
+      if (child.isMesh) {
+        child.material = SHOWCASE_MATERIAL
+      }
+    })
+    
+    const box = new THREE.Box3().setFromObject(c)
+    const size = new THREE.Vector3()
+    box.getSize(size)
+    const maxDim = Math.max(size.x, size.y, size.z)
+    
+    return { clone: c, scale: 5 / maxDim }
+  }, [scene])
 
   useFrame(() => {
     if (groupRef.current) {
@@ -20,28 +42,9 @@ function ModelViewer({ modelName }) {
     }
   })
 
-  // Normalize scale so they all fit nicely
-  const box = new THREE.Box3().setFromObject(scene)
-  const size = new THREE.Vector3()
-  box.getSize(size)
-  const maxDim = Math.max(size.x, size.y, size.z)
-  const scale = 5 / maxDim
-
-  // Apply base material to look cool in showcase
-  scene.traverse(child => {
-    if (child.isMesh) {
-      child.material = new THREE.MeshStandardMaterial({
-        color: '#eef7ff',
-        roughness: 0.3,
-        metalness: 0.8,
-        envMapIntensity: 1.5,
-      })
-    }
-  })
-
   return (
     <group ref={groupRef} scale={scale} position={[0, -0.5, 0]}>
-      <primitive object={scene} />
+      <primitive object={clone} />
     </group>
   )
 }
@@ -59,7 +62,6 @@ export default function AircraftShowcase({ onClose }) {
       <ambientLight intensity={0.5} />
       <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={2} color="#00ffcc" />
       <spotLight position={[-10, 10, -10]} angle={0.15} penumbra={1} intensity={1} color="#ff0044" />
-      <Environment preset="city" />
 
       <Suspense fallback={<Html center><div style={{ color: '#00ffcc', fontFamily: 'monospace' }}>LOADING MODEL...</div></Html>}>
         <ModelViewer modelName={MODELS[index]} key={MODELS[index]} />

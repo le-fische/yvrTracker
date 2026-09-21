@@ -16,14 +16,14 @@ export default function CameraController({ cameraMode, selectedAircraftId, reset
   useEffect(() => {
     const dom = gl.domElement;
     const onDown = (e) => {
-      if (chaseViewIndex > 0) {
+      if (chaseViewIndex > 0 && CAMERA_VIEWS[chaseViewIndex]?.id === 'COCKPIT') {
         lookRefs.current.isDragging = true;
         lookRefs.current.lastX = e.clientX;
         lookRefs.current.lastY = e.clientY;
       }
     };
     const onMove = (e) => {
-      if (lookRefs.current.isDragging && chaseViewIndex > 0) {
+      if (lookRefs.current.isDragging && chaseViewIndex > 0 && CAMERA_VIEWS[chaseViewIndex]?.id === 'COCKPIT') {
         const dx = e.clientX - lookRefs.current.lastX;
         const dy = e.clientY - lookRefs.current.lastY;
         lookRefs.current.lastX = e.clientX;
@@ -135,14 +135,17 @@ export default function CameraController({ cameraMode, selectedAircraftId, reset
           
           if (view.id === 'COCKPIT' || view.id === 'TAIL') {
              if (metrics) {
+                const height = metrics.maxY - metrics.minY;
+                const length = metrics.maxZ - metrics.minZ;
                 if (view.id === 'COCKPIT') {
-                   // A fraction ahead of the nose (nose is minZ because forward is -Z)
-                   // Y offset is slightly up from center.
-                   offset.set(0, 0.05, metrics.minZ - 0.02);
+                   // Proportional ahead of nose and up from bottom
+                   offset.set(0, metrics.minY + height * 0.45, metrics.minZ - length * 0.05);
                 } else if (view.id === 'TAIL') {
-                   // Above the fin (maxY), behind the fin (maxZ)
-                   offset.set(0, metrics.maxY + 0.1, metrics.maxZ + 0.1);
+                   // Proportional above and behind fin
+                   offset.set(0, metrics.maxY + height * 0.5, metrics.maxZ + length * 0.2);
                 }
+             } else {
+                offset.fromArray([0, 0.4, 1.2]); // Fallback to CHASE
              }
           } else if (view.offset) {
              offset.fromArray(view.offset);
@@ -161,20 +164,29 @@ export default function CameraController({ cameraMode, selectedAircraftId, reset
              const targetRotation = new THREE.Quaternion().setFromRotationMatrix(
                 new THREE.Matrix4().lookAt(camera.position, lookTarget, camera.up)
              );
-             // Apply free look offsets
-             const euler = new THREE.Euler().setFromQuaternion(targetRotation, 'YXZ');
-             euler.y += yaw;
-             euler.x += pitch;
-             camera.quaternion.setFromEuler(euler);
+             // Apply free look offsets only if COCKPIT
+             if (view.id === 'COCKPIT') {
+                 const euler = new THREE.Euler().setFromQuaternion(targetRotation, 'YXZ');
+                 euler.y += yaw;
+                 euler.x += pitch;
+                 camera.quaternion.setFromEuler(euler);
+             } else {
+                 camera.quaternion.copy(targetRotation);
+             }
           } else {
              // 'aircraft' lookAt
              const targetRotation = new THREE.Quaternion().setFromRotationMatrix(
                new THREE.Matrix4().lookAt(camera.position, planePos, camera.up)
              );
-             const euler = new THREE.Euler().setFromQuaternion(targetRotation, 'YXZ');
-             euler.y += yaw;
-             euler.x += pitch;
-             camera.quaternion.setFromEuler(euler);
+             // Apply free look offsets only if COCKPIT
+             if (view.id === 'COCKPIT') {
+                 const euler = new THREE.Euler().setFromQuaternion(targetRotation, 'YXZ');
+                 euler.y += yaw;
+                 euler.x += pitch;
+                 camera.quaternion.setFromEuler(euler);
+             } else {
+                 camera.quaternion.copy(targetRotation);
+             }
           }
         } else {
           controls.enabled = true;
