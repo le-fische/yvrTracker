@@ -4,7 +4,7 @@ import { useRef, useEffect, useState, useMemo, memo, Suspense, useContext } from
 import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import * as THREE from 'three'
-import { getPosition, SCALE } from '../core/constants'
+import { getPosition, SCALE, AIRCRAFT_BASE_Y } from '../core/constants'
 import GLTFAircraft from './GLTFAircraft'
 import { formatAltitude, formatSpeed } from '../core/units'
 import { TimeOfDayContext } from '../core/TimeOfDayContext'
@@ -240,7 +240,7 @@ const LiveAircraft = memo(function LiveAircraft({ flight, showRoutes, onClick, i
           <GLTFAircraft 
             modelPath={modelPath} 
             scale={0.01} 
-            position={[0, -0.05, 0]} 
+            position={[0, AIRCRAFT_BASE_Y, 0]} 
             isNight={isNight} 
             onMetrics={(m) => {
               if (planeRef.current) {

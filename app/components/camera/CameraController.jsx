@@ -4,7 +4,7 @@ import { useRef, useEffect } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
-import { DEFAULT_FOV } from '../core/constants'
+import { DEFAULT_FOV, AIRCRAFT_BASE_Y } from '../core/constants'
 import { CAMERA_VIEWS } from './views'
 
 export default function CameraController({ cameraMode, selectedAircraftId, resetTrigger, chaseViewIndex }) {
@@ -139,10 +139,10 @@ export default function CameraController({ cameraMode, selectedAircraftId, reset
                 const length = metrics.maxZ - metrics.minZ;
                 if (view.id === 'COCKPIT') {
                    // Proportional ahead of nose and up from bottom
-                   offset.set(0, metrics.minY + height * 0.45, metrics.minZ - length * 0.05);
+                   offset.set(0, AIRCRAFT_BASE_Y + height * 0.45, metrics.minZ - length * 0.05);
                 } else if (view.id === 'TAIL') {
                    // Proportional above and behind fin
-                   offset.set(0, metrics.maxY + height * 0.5, metrics.maxZ + length * 0.2);
+                   offset.set(0, AIRCRAFT_BASE_Y + height * 1.5, metrics.maxZ + length * 0.2);
                 }
              } else {
                 offset.fromArray([0, 0.4, 1.2]); // Fallback to CHASE

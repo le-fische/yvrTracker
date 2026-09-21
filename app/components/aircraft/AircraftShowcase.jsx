@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, Suspense } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Html, useGLTF, OrbitControls, Environment, ContactShadows } from '@react-three/drei'
+import { Html, useGLTF, OrbitControls, ContactShadows } from '@react-three/drei'
 import * as THREE from 'three'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 
